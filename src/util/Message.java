@@ -1,19 +1,79 @@
 package util;
 
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.StringReader;
 import java.util.Properties;
 
 public class Message {
   private String msgType;
-  private String src;
-  private String dst;
+  private String src = "-1";
+  private String dst = "-1";
   private String song;
   private String url;
   private String message;
   
+  public Message() {
+    this("");
+  }
   
+  public Message (String type) {
+    this(type,  "");
+  }
+  
+  public Message (String type, String m) {
+    this(type, "",  "", m);
+  }
+  
+  public Message (String type, String key, String val) {
+    this(type, key,  val, "");
+  }
+  
+  public Message (String type,  String key, String val, String m) {
+    msgType = type;
+    song = key;
+    url = val;
+    message = m;
+  }
+  
+  public void setSrc(int s) {
+    src = "" + s;
+  }
+
+  public void setDst(int d) {
+    dst = "" + d;
+  }
+  
+  public String getType() {
+    return msgType;
+  }
+  
+  public int getSrc() {
+    try {
+      return Integer.parseInt(src);
+    } catch (NumberFormatException e) {
+      return -1;
+    }
+  }
+  
+  public int getDst() {
+    try {
+      return Integer.parseInt(dst);
+    } catch (NumberFormatException e) {
+      return -1;
+    }
+  }
+  
+  public String getSong() {
+    return song;
+  }
+  
+  public String getUrl() {
+    return url;
+  }
+  
+  public String getMessage() {
+    return message;
+  }
   
   public String marshal() {
     StringBuilder sb = new StringBuilder();
@@ -22,7 +82,7 @@ public class Message {
     sb.append("dst = " + dst + '\n');
     sb.append("song = " + song + '\n');
     sb.append("url = " + url + '\n');
-    sb.append("message = " + message + '\n');
+    sb.append("message = " + message);
     return sb.toString();
   }
   
