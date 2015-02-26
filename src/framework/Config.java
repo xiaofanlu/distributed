@@ -31,13 +31,13 @@ public class Config {
 		numProcesses = loadInt(prop,"NumProcesses");
 		addresses = new InetAddress[numProcesses];
 		ports = new int[numProcesses];
-		for (int i=0; i < numProcesses; i++) {
+		for (int i = 0; i < numProcesses; i++) {
 			ports[i] = loadInt(prop, "port" + i);
 			addresses[i] = InetAddress.getByName(prop.getProperty("host" + i).trim());
-			System.out.printf("%d: %d @ %s\n", i, ports[i], addresses[i]);
+			//System.out.printf("%d: %d @ %s\n", i, ports[i], addresses[i]);
 		}
 		if (prop.getProperty("ProcNum") != null) {
-			procNum = loadInt(prop,"procNum");
+			procNum = loadInt(prop, "ProcNum");
 		} else {
 			logger.info("procNum not loaded from file");
 		}
