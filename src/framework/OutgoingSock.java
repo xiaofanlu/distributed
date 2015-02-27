@@ -12,35 +12,35 @@ import java.io.OutputStream;
 import java.net.Socket;
 
 public class OutgoingSock {
-	final static byte[] MSG_SEP = "&".getBytes();
-	Socket sock;
-	OutputStream out;
-	
-	protected OutgoingSock(Socket sock) throws IOException {
-		this.sock = sock;
-		
-		out = sock.getOutputStream();
-		sock.shutdownInput();
-	}
-	
-	/** 
-	 * Do not use '&' character.  This is a hardcoded separator
-	 * @param msg
-	 * @throws IOException 
-	 */
-	protected synchronized void sendMsg(String msg) throws IOException {
-		out.write(msg.getBytes());
-		out.write(MSG_SEP);
-		out.flush();
-	}
-	
-	public synchronized void cleanShutdown() {
-		try { out.close(); } 
-		catch (IOException e) {}
+  final static byte[] MSG_SEP = "&".getBytes();
+  Socket sock;
+  OutputStream out;
 
-		try { 
-			sock.shutdownOutput();
-			sock.close(); 
-		} catch (IOException e) {}
-	}
+  protected OutgoingSock(Socket sock) throws IOException {
+    this.sock = sock;
+
+    out = sock.getOutputStream();
+    sock.shutdownInput();
+  }
+
+  /** 
+   * Do not use '&' character.  This is a hardcoded separator
+   * @param msg
+   * @throws IOException 
+   */
+  protected synchronized void sendMsg(String msg) throws IOException {
+    out.write(msg.getBytes());
+    out.write(MSG_SEP);
+    out.flush();
+  }
+
+  public synchronized void cleanShutdown() {
+    try { out.close(); } 
+    catch (IOException e) {}
+
+    try { 
+      sock.shutdownOutput();
+      sock.close(); 
+    } catch (IOException e) {}
+  }
 }

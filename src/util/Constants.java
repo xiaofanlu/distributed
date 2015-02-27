@@ -1,17 +1,29 @@
 package util;
 
 public class Constants {
-  public static final String GET_REQ  = "getreq";
-  public static final String PUT_REQ  = "putreq";
+  public static final String ADD_REQ  = "addreq";
   public static final String DEL_REQ  = "delreq";
+  public static final String EDIT_REQ  = "editreq";
+  
+  public static final String YES  = "yes";
+  public static final String NO  = "no";
+  
+  public static final String ABORT    = "abort";
+  public static final String COMMIT   = "commit";
+  
+  
   public static final String RESP     = "resp";
   public static final String SUCCESS  = "Success";
 
   public static final String READY    = "ready";
   public static final String REGISTER = "register";
-  public static final String ABORT    = "abort";
-  public static final String COMMIT   = "commit";
+
   public static final String ACK      = "ack";
+  
+  // this is used for the termination protocol
+  public static enum State {
+      ABORTED, COMMITTED, COMMITTABLE, UNCERTAIN
+  };
 
   /**
    * Error message used if an IOException arises while parsing the

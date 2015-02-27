@@ -6,8 +6,8 @@
  */
 
 /**
-* The sendMsg method has been modified by Navid Yaghmazadeh to fix a bug regarding to send a message to a reconnected socket.
-*/
+ * The sendMsg method has been modified by Navid Yaghmazadeh to fix a bug regarding to send a message to a reconnected socket.
+ */
 
 package framework;
 
@@ -26,110 +26,110 @@ import java.util.logging.Level;
  *
  */
 public class NetController {
-	private final Config config;
-	private final List<IncomingSock> inSockets;
-	private final OutgoingSock[] outSockets;
-	private final ListenServer listener;
-	
-	public NetController(Config config) {
-		this.config = config;
-		inSockets = Collections.synchronizedList(new ArrayList<IncomingSock>());
-		listener = new ListenServer(config, inSockets);
-		outSockets = new OutgoingSock[config.numProcesses];
-		listener.start();
-	}
-	
-	// Establish outgoing connection to a process
-	private synchronized void initOutgoingConn(int proc) throws IOException {
-		if (outSockets[proc] != null)
-			throw new IllegalStateException("proc " + proc + " not null");
-		
-		outSockets[proc] = new OutgoingSock(new Socket(config.addresses[proc], config.ports[proc]));
-		config.logger.info(String.format("Server %d: Socket to %d established", 
-				config.procNum, proc));
-	}
-	
-	/**
-	 * Send a msg to another process.  This will establish a socket if one is not created yet.
-	 * Will fail if recipient has not set up their own NetController (and its associated serverSocket)
-	 * @param process int specified in the config file - 0 based
-	 * @param msg Do not use the "&" character.  This is hardcoded as a message separator. 
-	 *            Sends as ASCII.  Include the sending server ID in the message
-	 * @return bool indicating success
-	 */
-	public synchronized boolean sendMsg(int process, String msg) {
-		try {
-			if (outSockets[process] == null)
-				initOutgoingConn(process);
-			outSockets[process].sendMsg(msg);
-		} catch (IOException e) { 
-			if (outSockets[process] != null) {
-				outSockets[process].cleanShutdown();
-				outSockets[process] = null;
-				try{
-					initOutgoingConn(process);
-                        		outSockets[process].sendMsg(msg);	
-				} catch(IOException e1){
-					if (outSockets[process] != null) {
-						outSockets[process].cleanShutdown();
-	                	outSockets[process] = null;
-					}
-					config.logger.info(String.format("Server %d: Msg to %d failed.",
-                        config.procNum, process));
-        		    config.logger.log(Level.FINE, String.format("Server %d: Socket to %d error",
-                        config.procNum, process), e);
-                    return false;
-				}
-				return true;
-			}
-			config.logger.info(String.format("Server %d: Msg to %d failed.", 
-				config.procNum, process));
-			config.logger.log(Level.FINE, String.format("Server %d: Socket to %d error", 
-				config.procNum, process), e);
-			return false;
-		}
-		return true;
-	}
-	
-	/**
-	 * Return a list of msgs received on established incoming sockets
-	 * @return list of messages sorted by socket, in FIFO order. *not sorted by time received*
-	 */
-	public synchronized List<String> getReceivedMsgs() {
-		List<String> objs = new ArrayList<String>();
-		synchronized(inSockets) {
-			ListIterator<IncomingSock> iter  = inSockets.listIterator();
-			while (iter.hasNext()) {
-				IncomingSock curSock = iter.next();
-				try {
-					objs.addAll(curSock.getMsgs());
-				} catch (Exception e) {
-					config.logger.log(Level.INFO, 
-							"Server " + config.procNum + " received bad data on a socket", e);
-					curSock.cleanShutdown();
-					iter.remove();
-				}
-			}
-		}
-		
-		return objs;
-	}
-	/**
-	 * Shuts down threads and sockets.
-	 */
-	public synchronized void shutdown() {
-		listener.cleanShutdown();
-        if(inSockets != null) {
-		    for (IncomingSock sock : inSockets)
-			    if(sock != null)
-                    sock.cleanShutdown();
+  private final Config config;
+  private final List<IncomingSock> inSockets;
+  private final OutgoingSock[] outSockets;
+  private final ListenServer listener;
+
+  public NetController(Config config) {
+    this.config = config;
+    inSockets = Collections.synchronizedList(new ArrayList<IncomingSock>());
+    listener = new ListenServer(config, inSockets);
+    outSockets = new OutgoingSock[config.numProcesses];
+    listener.start();
+  }
+
+  // Establish outgoing connection to a process
+  private synchronized void initOutgoingConn(int proc) throws IOException {
+    if (outSockets[proc] != null)
+      throw new IllegalStateException("proc " + proc + " not null");
+
+    outSockets[proc] = new OutgoingSock(new Socket(config.addresses[proc], config.ports[proc]));
+    config.logger.info(String.format("Server %d: Socket to %d established", 
+        config.procNum, proc));
+  }
+
+  /**
+   * Send a msg to another process.  This will establish a socket if one is not created yet.
+   * Will fail if recipient has not set up their own NetController (and its associated serverSocket)
+   * @param process int specified in the config file - 0 based
+   * @param msg Do not use the "&" character.  This is hardcoded as a message separator. 
+   *            Sends as ASCII.  Include the sending server ID in the message
+   * @return bool indicating success
+   */
+  public synchronized boolean sendMsg(int process, String msg) {
+    try {
+      if (outSockets[process] == null)
+        initOutgoingConn(process);
+      outSockets[process].sendMsg(msg);
+    } catch (IOException e) { 
+      if (outSockets[process] != null) {
+        outSockets[process].cleanShutdown();
+        outSockets[process] = null;
+        try{
+          initOutgoingConn(process);
+          outSockets[process].sendMsg(msg);	
+        } catch(IOException e1){
+          if (outSockets[process] != null) {
+            outSockets[process].cleanShutdown();
+            outSockets[process] = null;
+          }
+          config.logger.info(String.format("Server %d: Msg to %d failed.",
+              config.procNum, process));
+          config.logger.log(Level.FINE, String.format("Server %d: Socket to %d error",
+              config.procNum, process), e);
+          return false;
         }
-		if(outSockets != null) {
-            for (OutgoingSock sock : outSockets)
-			    if(sock != null)
-                    sock.cleanShutdown();
+        return true;
+      }
+      config.logger.info(String.format("Server %d: Msg to %d failed.", 
+          config.procNum, process));
+      config.logger.log(Level.FINE, String.format("Server %d: Socket to %d error", 
+          config.procNum, process), e);
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Return a list of msgs received on established incoming sockets
+   * @return list of messages sorted by socket, in FIFO order. *not sorted by time received*
+   */
+  public synchronized List<String> getReceivedMsgs() {
+    List<String> objs = new ArrayList<String>();
+    synchronized(inSockets) {
+      ListIterator<IncomingSock> iter  = inSockets.listIterator();
+      while (iter.hasNext()) {
+        IncomingSock curSock = iter.next();
+        try {
+          objs.addAll(curSock.getMsgs());
+        } catch (Exception e) {
+          config.logger.log(Level.INFO, 
+              "Server " + config.procNum + " received bad data on a socket", e);
+          curSock.cleanShutdown();
+          iter.remove();
         }
-		
-	}
+      }
+    }
+
+    return objs;
+  }
+  /**
+   * Shuts down threads and sockets.
+   */
+  public synchronized void shutdown() {
+    listener.cleanShutdown();
+    if(inSockets != null) {
+      for (IncomingSock sock : inSockets)
+        if(sock != null)
+          sock.cleanShutdown();
+    }
+    if(outSockets != null) {
+      for (OutgoingSock sock : outSockets)
+        if(sock != null)
+          sock.cleanShutdown();
+    }
+
+  }
 
 }

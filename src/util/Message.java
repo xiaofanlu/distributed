@@ -35,6 +35,19 @@ public class Message {
     message = m;
   }
   
+  public boolean isRequest() {
+    return msgType.equals(Constants.ADD_REQ) || 
+           msgType.equals(Constants.DEL_REQ) || 
+           msgType.equals(Constants.EDIT_REQ);
+  }
+  
+  public boolean isFeedback() {
+    return msgType.equals(Constants.COMMIT) || 
+        msgType.equals(Constants.ABORT);
+    
+  }
+  
+  
   public void setSrc(int s) {
     src = "" + s;
   }

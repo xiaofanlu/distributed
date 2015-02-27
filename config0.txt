@@ -1,6 +1,8 @@
-NumProcesses = 2
+NumProcesses = 3
 port0 = 10003
 port1 = 10004
+port2 = 10005
 host0 = 127.0.0.1
 host1 = 127.0.0.1
+host2 = 127.0.0.1
 ProcNum = 0

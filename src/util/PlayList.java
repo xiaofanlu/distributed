@@ -4,7 +4,7 @@ import java.util.Hashtable;
 import java.util.Scanner;
 
 
-public class PlayList {
+public class PlayList implements KVStore {
   public static Hashtable<String, String> pl;
 
   public PlayList () {
@@ -16,20 +16,27 @@ public class PlayList {
     unmarshal(str);
   }
   
-  public void add(String song, String url){
+  public boolean add(String song, String url){
     pl.put(song, url);
+    return true;
   }
 
-  public void delete(String song, String url){
+  public boolean delete(String song, String url){
     if(pl.containsKey(song)){
       pl.remove(song);
+      return true;
+    } else {
+      return false;
     }
   }
 
-  public void edit(String song, String url) {
+  public boolean edit(String song, String url) {
     if(pl.containsKey(song)) {
       pl.remove(song);
       pl.put(song, url);
+      return true;
+    } else {
+      return false;
     }
   }
 
