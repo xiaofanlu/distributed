@@ -36,9 +36,20 @@ public class Message {
   }
   
   public boolean isRequest() {
-    return msgType.equals(Constants.ADD_REQ) || 
-           msgType.equals(Constants.DEL_REQ) || 
-           msgType.equals(Constants.EDIT_REQ);
+    return msgType.equals(Constants.VOTE_REQ);
+  }
+  
+  public boolean isResponse() {
+    return msgType.equals(Constants.RESP);
+  }
+  
+  public boolean votedNo() {
+    return msgType.equals(Constants.RESP) && message.equals(Constants.NO);
+  }
+  
+  public boolean votedYes() {
+    System.out.println(">>" + message + "<<");
+    return msgType.equals(Constants.RESP) && message.equals(Constants.YES);
   }
   
   public boolean isFeedback() {

@@ -1,123 +1,108 @@
 package tpc;
 
-import java.io.FileNotFoundException;
-import java.io.IOException;
 import java.util.List;
 
 import util.Constants;
 import util.Message;
-import util.PlayList;
-import framework.Config;
+
 import framework.NetController;
 
-/*
- * For test only
- * 
- */
-public class TPCSlave {
-  private Config config;
-  private NetController nc;
-  private TPCLog log;
-  private PlayList pl;
-  
-  private enum State {
+
+public class TPCSlave extends Thread {
+  public enum SlaveState {
     READY, ABORTED, COMMITTED, COMMITTABLE, UNCERTAIN
   };
-  
-  private State state;
-  
 
-  public TPCSlave(String configFile) {
-    try {
-      config = new Config(configFile);
-    } catch (FileNotFoundException e) {
-      e.printStackTrace();
-    } catch (IOException e) {
-      e.printStackTrace();
-    }
-    nc = new NetController(config);
-    pl = new PlayList ();
-    state = State.READY;
+
+  private TPCNode node;
+  private SlaveState state;
+
+
+  public TPCSlave(TPCNode node) {
+    this.node = node;
+    state = SlaveState.READY;
+    
+  }
+  
+  public void run() {
+    new Listener(node.nc).start();
+  }
+  
+  public void rollback() {
+    
+  }
+  
+  public void logToScreen(String m) {
+    node.logToScreen(m);
   }
 
-  public void start() {
-    while (true) {
-      List<String> buffer = nc.getReceivedMsgs();
-      if (!buffer.isEmpty()) {
+
+  // inner Listener class
+  class Listener extends Thread {
+    NetController nc;
+    public Listener (NetController nc) {
+      this.nc = nc;
+    }
+
+    public void run() {
+      while (true) {
+        List<String> buffer = nc.getReceivedMsgs();
         for (String str : buffer) {
-          
-          Message m = new Message ();
-          m.unmarshal(str);
-          processMessage(m);
-           
+          processMessage(str);
         }
-      } else {
         try {
-          Thread.sleep(1000);
+          Thread.sleep(500);
         } catch (InterruptedException e) {
           e.printStackTrace();
         }
       }
     }
-  }
-  
-  public void processMessage(Message m) {
-    if (m.isRequest()) {
-      processRequest(m);
-    } else if (m.isFeedback()) {
-      processFeedback(m);
-    }
-  }
-  
-  public void processFeedback(Message m) {
-    System.out.println("Get Reply: " + m.getType());
-    if (m.getType().equals(Constants.COMMIT)) {
-      assert state == State.UNCERTAIN;
-      state = State.READY;
-    } else if (m.getType().equals(Constants.ABORT)) {
-      if (state == State.ABORTED) {
-        state = State.READY;
-      } else if (state == State.UNCERTAIN) {
-        rollback();
+
+
+    public void processMessage(String str) {
+      Message m = new Message ();
+      m.unmarshal(str);
+      if (m.isRequest()) {
+        processRequest(m);
+      } else if (m.isFeedback()) {
+        processFeedback(m);
       }
     }
-  }
-  
-  public void rollback() {
-    // lalalla
-  }
-  
-  
-  public void processRequest(Message m) {
-    assert state == State.ABORTED;
-    boolean success = false;
-    if (m.getType().equals(Constants.ADD_REQ)) {
-      success = pl.add(m.getSong(), m.getUrl());
-    } else if (m.getType().equals(Constants.DEL_REQ)) {
-      success = pl.delete(m.getSong(), m.getUrl());
-    } else if (m.getType().equals(Constants.EDIT_REQ)) {
-      success = pl.edit(m.getSong(), m.getUrl());
+
+    public void processFeedback(Message m) {
+      System.out.println("Get Reply: " + m.getType());
+      if (m.getType().equals(Constants.COMMIT)) {
+        assert state == SlaveState.UNCERTAIN;
+        state = SlaveState.READY;
+      } else if (m.getType().equals(Constants.ABORT)) {
+        if (state == SlaveState.ABORTED) {
+          state = SlaveState.READY;
+        } else if (state == SlaveState.UNCERTAIN) {
+          rollback();
+        }
+      }
     }
-    logToScreen("Get Request: " + m.getType());
-    state = success ? State.UNCERTAIN : State.ABORTED;
-    Message reply = new Message(success ? Constants.YES : Constants.NO);
-    logToScreen("Voted: " + reply.getType());
-    unicast(m.getSrc(), reply);
+    
+
+
+    public void processRequest(Message m) {
+      assert state == SlaveState.ABORTED;
+      boolean success = false;
+      if (m.getMessage().equals(Constants.ADD)) {
+        success = node.add(m.getSong(), m.getUrl());
+      } else if (m.getMessage().equals(Constants.DEL)) {
+        success = node.delete(m.getSong(), m.getUrl());
+      } else if (m.getMessage().equals(Constants.EDIT)) {
+        success = node.edit(m.getSong(), m.getUrl());
+      }
+      logToScreen("Get Request: " + m.getMessage());
+      state = success ? SlaveState.UNCERTAIN : SlaveState.ABORTED;
+      Message reply = new Message(Constants.RESP, "", "", success ? Constants.YES : Constants.NO);
+      logToScreen("Voted: " + reply.getMessage());
+      node.unicast(m.getSrc(), reply);
+    }
+
   }
-  
-  public void unicast(int dst, Message m) {
-    m.setSrc(getProcNum());
-    m.setDst(dst);
-    nc.sendMsg(dst, m.marshal());
-  }
-  
-  public int getProcNum() {
-    return config.procNum;
-  }
-  
-  public void logToScreen(String m) {
-    System.out.println("Slave: " + m);
-  }
-  
+
 }
 

@@ -35,4 +35,10 @@ public class MessageTest {
     assertEquals(m.getMessage(), ""); 
   }
   
+  @Test
+  public void testVoteNo () {
+    Message m = new Message (Constants.RESP, "a", "b", Constants.NO);
+    assertEquals(m.getMessage(), Constants.NO);
+    assertEquals(m.votedNo(), true);
+  }
 }

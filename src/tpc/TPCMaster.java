@@ -1,138 +1,176 @@
 package tpc;
 
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.util.HashSet;
+
+import java.util.Scanner;
 import java.util.TreeSet;
 import java.util.List;
-import java.util.logging.Level;
 
 import util.Constants;
 import util.KVStore;
 import util.Message;
-import util.PlayList;
-import framework.Config;
 import framework.NetController;
 
-/*
- * For test only
- * 
- */
+public class TPCMaster extends Thread implements KVStore {
+  private TPCNode node;
+  public  TreeSet<Integer> yesList = null;
+  public TreeSet<Integer> noList = null;
+  private final int TIME_OUT = 10;  // 10 secs timeout
 
-public class TPCMaster implements KVStore {
-  private Config config;
-  private NetController nc;
-  private TPCLog log;
-  private PlayList pl;
- 
-  public TreeSet<Integer> broadcastList;
+  public TPCMaster(TPCNode node) {
+    this.node = node;
+  }
 
-  public TPCMaster(String configFile) {
-    try {
-      config = new Config(configFile);
-    } catch (FileNotFoundException e) {
-      e.printStackTrace();
-    } catch (IOException e) {
-      e.printStackTrace();
-    }
-    config.logger.log(Level.WARNING, "Server: Started");
-    nc = new NetController(config);
-
-    broadcastList = new TreeSet<Integer>();
-    for (int i = 0; i < config.numProcesses; i++) {
-      if (i != config.procNum) {
-        broadcastList.add(i);
+  public void run() {
+    new Listener(node.nc).start();
+    @SuppressWarnings("resource")
+    Scanner sc = new Scanner(System.in);
+    while (true) {
+      System.out.print("Enter the command, 1 for add, 2 for del, 3 for edit: ");
+      int command = sc.nextInt();
+      if (command <= 0 || command > 3) {
+        System.out.println("Wrong command code!!");
+        continue;
       }
-    }
-    config.logger.log(Level.WARNING, "Server: Broadcast List");
-    
-    pl = new PlayList ();
-  }
-  
-  @Override
-  public boolean add(String song, String url) {
-    config.logger.log(Level.WARNING, "ADD " + song + "\t" +  url);
-    logToScreen("ADD " + song + "\t" +  url);
-    Message m = new  Message (Constants.ADD_REQ, song, url);
-    if (twoPC(m)) {
-      return pl.add(song, url);
-    } else {
-      return false;
-    }
-  }
-
-  @Override
-  public boolean delete(String song, String url) {
-    Message m = new  Message (Constants.DEL_REQ, song, url);
-    if (twoPC(m)) {
-      return pl.delete(song, url); 
-    } else {
-      return false;
-    }
-  }
-
-  @Override
-  public boolean edit(String song, String url) {
-    Message m = new  Message (Constants.EDIT_REQ, song, url);
-    if (twoPC(m)) {
-      return pl.edit(song, url); 
-    } else {
-      return false;
-    }
-  }
-
-  public boolean twoPC(Message m) {
-    broadcast(m);
-    logToScreen("Broadcast Request " + m.getType());
-    boolean commit = getReply();
-    Message reply = new Message(commit ? Constants.COMMIT : Constants.ABORT);
-    broadcast(reply);
-    logToScreen("Broadcast Reply: " + reply.getType());
-    return commit;
-  }
-  
-  public void broadcast(Message m) {
-    for (int i : broadcastList) {
-      unicast(i, m);
-    }
-  }
-  
-  public void unicast(int dst, Message m) {
-    m.setSrc(getProcNum());
-    m.setDst(dst);
-    nc.sendMsg(dst, m.marshal());
-  }
-  
-  
-  public boolean getReply() {
-    HashSet<Integer> replied = new HashSet<Integer> ();
-    boolean commit = true;
-    while (replied.size() < broadcastList.size()) {
-      List<String> buffer = nc.getReceivedMsgs();
-      for (String str : buffer) {
-        Message m = new Message ();
-        m.unmarshal(str);
-        logToScreen("From: " + m.getSrc() + "\t Type" + m.getType());
-        if (m.getType().equals(Constants.NO)) {
-          commit = false;
-        } 
-        replied.add(m.getSrc());
+      System.out.print("Enter song name: ");
+      String song = sc.next();
+      System.out.print("Enter song url: ");
+      String url = sc.next();
+      switch(command) {
+      case 1:  add(song, url);
+      break;
+      case 2:  delete(song, url);
+      break;
+      case 3:  edit(song, url);
+      break;
       }
       try {
-        Thread.sleep(500);
+        Thread.sleep(5000);
       } catch (InterruptedException e) {
         e.printStackTrace();
       }
     }
-    return commit;
   }
-  
+
+  @Override
+  public boolean add(String song, String url) {
+    logToScreen("ADD " + song + "\t" +  url);
+    Message m = new  Message (Constants.VOTE_REQ, song, url, Constants.ADD);
+    return twoPC(m);
+  }
+
+  @Override
+  public boolean delete(String song, String url) {
+    Message m = new  Message (Constants.VOTE_REQ, song, url, Constants.DEL);
+    return twoPC(m);
+  }
+
+  @Override
+  public boolean edit(String song, String url) {
+    Message m = new  Message (Constants.VOTE_REQ, song, url, Constants.EDIT);
+    return twoPC(m);
+  }
+
+  public boolean twoPC(Message m) {
+    startTPC(m);
+    boolean rst = false;
+    if (collectReply(TIME_OUT)) {  // no timeout
+      if (noList.size() == 0 && node.execute(m)) {
+        broadcast(new Message(Constants.COMMIT));
+        rst = true;
+      } else {
+        broadcast(new Message(Constants.ABORT));
+        rst = false;
+      }
+    } else {  // timeout
+      node.broadcast(new Message(Constants.ABORT), yesList);
+      rst = false;
+    }
+    finishTPC();
+    return rst;
+  }
+
+
+  public boolean collectReply(int time_out) {
+    for (int i = 0; i < time_out; i++) {
+      if (yesList.size() + noList.size() == node.size()) {
+        logToScreen("All votes collected. Yes: " + yesList.size() + " No: " + noList.size());
+        return true;  // no tme_out
+      }
+      try {
+        Thread.sleep(1000);
+      } catch (InterruptedException e) {
+        e.printStackTrace();
+      }
+    }
+    logToScreen("Timeout");
+    return false; // timeout
+  }
+
+  public void startTPC (Message m) {
+    yesList = new TreeSet<Integer> ();
+    noList  = new TreeSet<Integer> ();
+    node.broadcast(m);
+    //node.log(m);
+    logToScreen("Start 2PC " + m.getMessage());
+  }
+
+  public void finishTPC() {
+    yesList = null;
+    noList = null;
+    logToScreen("Finish 2PC ");
+  }
+
   public int getProcNum() {
-    return config.procNum;
+    return node.getProcNum();
   }
-  
+
   public void logToScreen(String m) {
-    System.out.println("Server: " + m);
+    node.logToScreen(m);
   }
+
+  public void broadcast(Message m) {
+    node.broadcast(m);
+  }
+
+  public void unicast(int dst, Message m) {
+    node.unicast(dst, m);
+  }
+
+
+  // inner Listener class
+  class Listener extends Thread {
+    NetController nc;
+    public Listener (NetController nc) {
+      this.nc = nc;
+    }
+
+    public void run() {
+      while (true) {
+        List<String> buffer = nc.getReceivedMsgs();
+        for (String str : buffer) {
+
+          processMessage(str);
+        }
+        try {
+          Thread.sleep(500);
+        } catch (InterruptedException e) {
+          e.printStackTrace();
+        }
+      }
+    }
+
+    public void processMessage(String str) {
+      Message m = new Message ();
+      m.unmarshal(str);
+      if (m.isResponse()) {
+        if (m.getMessage().equals(Constants.YES) && yesList != null) {
+          yesList.add(m.getSrc());
+        } else if (m.getMessage().equals(Constants.NO) && noList != null) {
+          noList.add(m.getSrc());
+        }
+      } 
+    }
+  }
+
 
 }

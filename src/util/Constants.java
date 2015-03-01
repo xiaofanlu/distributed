@@ -1,24 +1,29 @@
 package util;
 
 public class Constants {
-  public static final String ADD_REQ  = "addreq";
-  public static final String DEL_REQ  = "delreq";
-  public static final String EDIT_REQ  = "editreq";
+  public static final String VOTE_REQ  = "votereq";
   
+  public static final String ADD = "add";
+  public static final String DEL  = "del";
+  public static final String EDIT  = "edit";
+  
+  public static final String RESP     = "resp";
   public static final String YES  = "yes";
   public static final String NO  = "no";
   
+  public static final String ACK      = "ack";
+
+  
   public static final String ABORT    = "abort";
   public static final String COMMIT   = "commit";
+  public static final String PRECOMMIT   = "precommit";
   
-  
-  public static final String RESP     = "resp";
+
   public static final String SUCCESS  = "Success";
 
   public static final String READY    = "ready";
   public static final String REGISTER = "register";
 
-  public static final String ACK      = "ack";
   
   // this is used for the termination protocol
   public static enum State {
