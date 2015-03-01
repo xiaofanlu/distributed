@@ -3,7 +3,6 @@ package tpc;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.TreeSet;
-import java.util.logging.Level;
 
 import util.Constants;
 import util.KVStore;
@@ -17,6 +16,10 @@ public class TPCNode implements KVStore {
   NetController nc;
   private TPCLog log;
   private PlayList pl;
+  private boolean isMaster = false;
+  private TPCMaster master;
+  private TPCSlave slave;
+  
   public TreeSet<Integer> broadcastList;
 
   public TPCNode(String configFile) {
@@ -28,7 +31,9 @@ public class TPCNode implements KVStore {
       e.printStackTrace();
     }
     nc = new NetController(config);
-
+    String logName = "TPCLog" + getProcNum() + ".txt";
+    log = new TPCLog(logName, this);
+    
     broadcastList = new TreeSet<Integer>();
     for (int i = 0; i < config.numProcesses; i++) {
       if (i != config.procNum) {
@@ -44,10 +49,14 @@ public class TPCNode implements KVStore {
   public void start () {
     if (getProcNum() == 0) {
       System.out.println(">>>> Run as Master");
-      new TPCMaster(this).start();
+      isMaster = true;
+      master = new TPCMaster(this);
+      master.start();
     } else {
       System.out.println(">>>> Run as Slave");
-      new TPCSlave(this).start();
+      isMaster = false;
+      slave = new TPCSlave(this);
+      slave.start();
     }
   }
   
@@ -104,4 +113,9 @@ public class TPCNode implements KVStore {
     }
     return false;
   }
+  
+  public void log(Message m) {
+    log.appendAndFlush(m);
+  }
+  
 }

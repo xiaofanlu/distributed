@@ -75,18 +75,30 @@ public class TPCMaster extends Thread implements KVStore {
     boolean rst = false;
     if (collectReply(TIME_OUT)) {  // no timeout
       if (noList.size() == 0 && node.execute(m)) {
-        broadcast(new Message(Constants.COMMIT));
+        doCommit();
         rst = true;
       } else {
-        broadcast(new Message(Constants.ABORT));
+        doAbort();
         rst = false;
       }
     } else {  // timeout
-      node.broadcast(new Message(Constants.ABORT), yesList);
+      doAbort();
       rst = false;
     }
     finishTPC();
     return rst;
+  }
+  
+  public void doCommit() {
+    Message commit = new Message(Constants.COMMIT);
+    node.log(commit);
+    node.broadcast(commit);
+  }
+  
+  public void doAbort() {
+    Message abort = new Message(Constants.ABORT);
+    node.log(abort);
+    node.broadcast(abort, yesList);
   }
 
 
@@ -110,7 +122,7 @@ public class TPCMaster extends Thread implements KVStore {
     yesList = new TreeSet<Integer> ();
     noList  = new TreeSet<Integer> ();
     node.broadcast(m);
-    //node.log(m);
+    node.log(m);
     logToScreen("Start 2PC " + m.getMessage());
   }
 
@@ -148,7 +160,6 @@ public class TPCMaster extends Thread implements KVStore {
       while (true) {
         List<String> buffer = nc.getReceivedMsgs();
         for (String str : buffer) {
-
           processMessage(str);
         }
         try {

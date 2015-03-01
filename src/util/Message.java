@@ -1,16 +1,20 @@
 package util;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.io.StringReader;
 import java.util.Properties;
 
-public class Message {
+public class Message implements Serializable {
   private String msgType;
   private String src = "-1";
   private String dst = "-1";
   private String song;
   private String url;
   private String message;
+  
+  public static final long serialVersionUID = 6473128480951955693L;
+
   
   public Message() {
     this("");
