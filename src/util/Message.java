@@ -5,6 +5,8 @@ import java.io.Serializable;
 import java.io.StringReader;
 import java.util.Properties;
 
+import tpc.TPCNode;
+
 public class Message implements Serializable {
   private String msgType;
   private String src = "-1";
@@ -43,6 +45,9 @@ public class Message implements Serializable {
     return msgType.equals(Constants.VOTE_REQ);
   }
   
+  public boolean isAck() {
+    return msgType.equals(Constants.ACK);
+  }
   public boolean isResponse() {
     return msgType.equals(Constants.RESP);
   }
@@ -57,9 +62,16 @@ public class Message implements Serializable {
   }
   
   public boolean isFeedback() {
-    return msgType.equals(Constants.COMMIT) || 
-        msgType.equals(Constants.ABORT);
-    
+    return msgType.equals(Constants.COMMIT) ||
+        msgType.equals(Constants.PRECOMMIT) ||
+      msgType.equals(Constants.ABORT);
+  }
+  
+  public TPCNode.SlaveState getState() {
+    if (!msgType.equals(Constants.STATE_REP)) {
+      return TPCNode.SlaveState.READY;  // irrelevent state
+    }
+    return TPCNode.SlaveState.valueOf(message);
   }
   
   

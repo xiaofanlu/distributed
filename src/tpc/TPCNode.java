@@ -19,9 +19,14 @@ public class TPCNode implements KVStore {
   private boolean isMaster = false;
   private TPCMaster master;
   private TPCSlave slave;
-  
   public TreeSet<Integer> broadcastList;
 
+  public enum SlaveState {
+    READY, ABORTED, COMMITTED, COMMITTABLE, UNCERTAIN
+  };
+  SlaveState state;
+
+  
   public TPCNode(String configFile) {
     try {
       config = new Config(configFile);
@@ -113,6 +118,11 @@ public class TPCNode implements KVStore {
     }
     return false;
   }
+  
+  public void runElection() {
+    logToScreen("Run Election");
+  }
+  
   
   public void log(Message m) {
     log.appendAndFlush(m);

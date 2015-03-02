@@ -1,6 +1,7 @@
 package util;
 
 public class Constants {
+  public static final String STATE_REQ  = "statereq";
   public static final String VOTE_REQ  = "votereq";
   
   public static final String ADD = "add";
@@ -17,6 +18,11 @@ public class Constants {
   public static final String ABORT    = "abort";
   public static final String COMMIT   = "commit";
   public static final String PRECOMMIT   = "precommit";
+  
+  public static final String STATE_REP  = "statereport";
+  
+  
+  
   
 
   public static final String SUCCESS  = "Success";
