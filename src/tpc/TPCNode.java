@@ -19,6 +19,7 @@ public class TPCNode implements KVStore {
   private boolean isMaster = false;
   private TPCMaster master;
   private TPCSlave slave;
+  private Integer viewNum = 0; // Current Master ID
   public TreeSet<Integer> broadcastList;
 
   public enum SlaveState {
@@ -67,6 +68,10 @@ public class TPCNode implements KVStore {
   
   public int getProcNum() {
     return config.procNum;
+  }
+  
+  public int getMaster() {
+    return viewNum;
   }
   
   public void logToScreen(String m) {
@@ -119,13 +124,17 @@ public class TPCNode implements KVStore {
     return false;
   }
   
-  public void runElection() {
-    logToScreen("Run Election");
-  }
+
   
   
   public void log(Message m) {
     log.appendAndFlush(m);
+  }
+  
+  public class Election extends Thread {
+    public void run() {
+      logToScreen("Run Election");
+    }
   }
   
 }

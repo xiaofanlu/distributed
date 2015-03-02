@@ -41,8 +41,12 @@ public class Message implements Serializable {
     message = m;
   }
   
-  public boolean isRequest() {
+  public boolean isVoteReq() {
     return msgType.equals(Constants.VOTE_REQ);
+  }
+  
+  public boolean isStateReq() {
+    return msgType.equals(Constants.STATE_REQ);
   }
   
   public boolean isAck() {
