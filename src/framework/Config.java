@@ -41,6 +41,27 @@ public class Config {
     } else {
       logger.info("procNum not loaded from file");
     }
+    if (prop.getProperty("partialCommit") != null) {
+      partialCommit = loadInt(prop, "partialCommit");
+    } else {
+      partialCommit = -1;
+    }
+    if (prop.getProperty("deathAfterProcess") != null) {
+      deathAfterProcess = loadInt(prop, "deathAfterProcess");
+    } else {
+      deathAfterProcess = -1;
+    }
+    if (prop.getProperty("deathAfterCount") != null) {
+      deathAfterCount = loadInt(prop, "deathAfterCount");
+    } else {
+      deathAfterCount = Integer.MAX_VALUE;
+    }
+    if (prop.getProperty("delay") != null) {
+      delay = loadInt(prop, "delay");
+    } else {
+      delay = 1;
+    }
+    
   }
 
   private int loadInt(Properties prop, String s) {
@@ -79,4 +100,28 @@ public class Config {
    * Verbosity can be restricted by raising level to WARN
    */
   public Logger logger;
+  
+  
+  /**
+   * - partialCommit <n>
+   * When the process becomes coordinator, she will only send the commit broadcast to process
+   * n and then crash...
+   * 
+   */
+  public int partialCommit;
+  
+  /**
+   * - deathAfter <n> <p>
+   * Process kills itself after received n messages from process p
+   */
+  public int deathAfterProcess;
+  public int deathAfterCount;
+  
+  
+  /*
+   * -delay <n> 
+   * Slow down the protocol to allow for human observation and intervention.
+   */
+  public int delay;
+  
 }

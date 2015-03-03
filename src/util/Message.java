@@ -49,11 +49,20 @@ public class Message implements Serializable {
     return msgType.equals(Constants.STATE_REQ);
   }
   
+  public boolean isStateReport() {
+    return msgType.equals(Constants.STATE_REP);
+  }
+  
   public boolean isAck() {
     return msgType.equals(Constants.ACK);
   }
+  
   public boolean isResponse() {
     return msgType.equals(Constants.RESP);
+  }
+  
+  public boolean isMaster() {
+    return msgType.equals(Constants.UR_SELECTED);
   }
   
   public boolean votedNo() {

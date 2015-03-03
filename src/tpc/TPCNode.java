@@ -2,32 +2,46 @@ package tpc;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.List;
 import java.util.TreeSet;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 import util.Constants;
 import util.KVStore;
 import util.Message;
 import util.PlayList;
+import util.UpList;
 import framework.Config;
 import framework.NetController;
 
 public class TPCNode implements KVStore {
-  private Config config;
+  Config config;
   NetController nc;
   private TPCLog log;
-  private PlayList pl;
-  private boolean isMaster = false;
-  private TPCMaster master;
-  private TPCSlave slave;
-  private Integer viewNum = 0; // Current Master ID
+  PlayList pl;
+  private TPCMaster masterThread;
+  private TPCSlave slaveThread;
+
+  int viewNum; // Current Master ID
   public TreeSet<Integer> broadcastList;
+  //Set of Nodes that are operational,  including coordinator and processes
+  public UpList upList;
+
+  ConcurrentLinkedQueue<Message> messageQueue = new ConcurrentLinkedQueue<Message> ();
+
+
+  // for test
+  HashMap<Integer, Integer> messageCount = new HashMap<Integer, Integer> ();
+
+
 
   public enum SlaveState {
     READY, ABORTED, COMMITTED, COMMITTABLE, UNCERTAIN
   };
   SlaveState state;
 
-  
+
   public TPCNode(String configFile) {
     try {
       config = new Config(configFile);
@@ -37,43 +51,55 @@ public class TPCNode implements KVStore {
       e.printStackTrace();
     }
     nc = new NetController(config);
+
     String logName = "TPCLog" + getProcNum() + ".txt";
     log = new TPCLog(logName, this);
-    
+
     broadcastList = new TreeSet<Integer>();
+    upList = new UpList();
+    
     for (int i = 0; i < config.numProcesses; i++) {
       if (i != config.procNum) {
         broadcastList.add(i);
       }
+      upList.add(i);
     }
+    viewNum = upList.getMaster();
     //config.logger.log(Level.WARNING, "Server: Broadcast List");
-    
+
     pl = new PlayList ();
     start();
   }
-  
+
   public void start () {
+    new Listener().start();
     if (getProcNum() == 0) {
       System.out.println(">>>> Run as Master");
-      isMaster = true;
-      master = new TPCMaster(this);
-      master.start();
+      masterThread = new TPCMaster(this);
+      masterThread.start();
     } else {
       System.out.println(">>>> Run as Slave");
-      isMaster = false;
-      slave = new TPCSlave(this);
-      slave.start();
+      slaveThread = new TPCSlave(this);
+      slaveThread.start();
     }
   }
-  
+
+  public int getSleepTime() {
+    return (config.delay + 1) * 1000;
+  }
+
+  public int getDelayTime() {
+    return config.delay * 1000;
+  }
+
   public int getProcNum() {
     return config.procNum;
   }
-  
+
   public int getMaster() {
     return viewNum;
   }
-  
+
   public void logToScreen(String m) {
     System.out.println("Node " + getProcNum() + ": " + m);
   }
@@ -92,27 +118,43 @@ public class TPCNode implements KVStore {
   public boolean edit(String song, String url) {
     return pl.edit(song, url);
   }
-  
+
   public void broadcast(Message m) {
     broadcast(m, broadcastList);
   }
-  
+
   public void broadcast(Message m, TreeSet<Integer> list) {
+    try {
+      Thread.sleep(getDelayTime());
+    } catch (InterruptedException e) {
+      e.printStackTrace();
+    }
     for (int i : list) {
-      unicast(i, m);
+      unicastNoDealy(i, m);
     }
   }
-  
-  public void unicast(int dst, Message m) {
+
+  public void unicastNoDealy(int dst, Message m) {
     m.setSrc(getProcNum());
     m.setDst(dst);
     nc.sendMsg(dst, m.marshal());
   }
-  
-  public int size() {
-    return broadcastList.size();
+
+  public void unicast(int dst, Message m) {
+    try {
+      Thread.sleep(getDelayTime());
+    } catch (InterruptedException e) {
+      e.printStackTrace();
+    }
+    m.setSrc(getProcNum());
+    m.setDst(dst);
+    nc.sendMsg(dst, m.marshal());
   }
-  
+
+  public int size() {
+    return upList.size();
+  }
+
   public boolean execute(Message m) {
     if (m.getMessage().equals(Constants.ADD)) {
       return pl.add(m.getSong(), m.getUrl());
@@ -123,18 +165,104 @@ public class TPCNode implements KVStore {
     }
     return false;
   }
-  
 
-  
-  
   public void log(Message m) {
     log.appendAndFlush(m);
   }
-  
-  public class Election extends Thread {
-    public void run() {
-      logToScreen("Run Election");
-    }
+
+  public void printPlayList() {
+    pl.print();
+  }
+
+  public Message getPrevMessage () {
+    return log.getLastEntry();
+  }
+
+  public boolean containsSong(String song) {
+    return pl.containsSong(song);
   }
   
+  public void setMaster(int id) {
+    viewNum = id;
+    upList.setMaster(id);
+  }
+  
+  public void runAsMaster() {
+    setMaster(getProcNum());
+    masterThread = new TPCMaster(TPCNode.this, true);
+    masterThread.start();
+  }
+  
+
+  public class Election extends Thread {
+    public void run() {
+      logToScreen("Running election protocol...");
+      Integer temp_viewNum = viewNum;
+      if(upList.size() == 1 & viewNum == config.procNum){
+        // Node is the only node in the network, If the node itself is always in UpList,
+        // then this means node i is already the Master and no other master is available
+        logToScreen("Single Master Left...");
+      } else{
+        temp_viewNum = (viewNum + 1) % config.procNum; // Update viewNum
+      }
+      temp_viewNum =  upList.upList.ceiling(temp_viewNum);// The least element in the UP set that is no smaller than viewNum
+      if(temp_viewNum == null){
+        logToScreen("Can't find new Master, error");
+      } else {
+        upList.remove(viewNum);
+        viewNum = temp_viewNum;
+        if(temp_viewNum == config.procNum){
+          logToScreen("Self selected as Master...");
+          logToScreen("Invoke coordinator's algorithm of termination protocol...");
+          masterThread = new TPCMaster(TPCNode.this, true);
+          masterThread.start();
+        }
+        else{
+          logToScreen("Select >>> " + viewNum +" <<< as Master ...");
+          logToScreen("Invoke participant's algorithm of termination protocol...");
+          //Message msg = new Message(Constants.UR_SELECTED);
+          //unicast(temp_viewNum,msg);
+          Message msg = new Message(Constants.UR_SELECTED);
+          slaveThread = new TPCSlave(TPCNode.this, true);
+          slaveThread.start();
+          unicast(viewNum, msg);
+        }
+      }
+    }
+  }
+
+  // inner Listener class
+  class Listener extends Thread {
+    public void run() {
+      while (true) {
+        List<String> buffer = nc.getReceivedMsgs();
+        for (String str : buffer) {
+          processMessage(str);
+        }
+        try {
+          Thread.sleep(50);
+        } catch (InterruptedException e) {
+          e.printStackTrace();
+        }
+      }
+    }
+
+    public void processMessage(String str) {
+      Message m = new Message ();
+      m.unmarshal(str);
+      messageQueue.offer(m);
+      messageCount.put(m.getSrc(), messageCount.containsKey(m.getSrc()) ?
+          messageCount.get(m.getSrc()) + 1 : 1);
+      if (config.deathAfterProcess == m.getSrc()) {
+        if (config.deathAfterCount <= messageCount.get(m.getSrc())) {
+          logToScreen("Death after count triggered!!");
+          logToScreen("From Process: " + m.getSrc());
+          logToScreen("Message Count: " + messageCount.get(m.getSrc()));
+          System.exit(-1);
+        }
+      }
+      System.out.println(">>>>>>>>>>>> Message from " + m.getSrc() + ": " + m.getType() + "\t" + m.getMessage());
+    }
+  }
+
 }

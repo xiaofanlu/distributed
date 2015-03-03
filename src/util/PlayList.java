@@ -1,6 +1,7 @@
 package util;
 
 import java.util.Hashtable;
+import java.util.Map;
 import java.util.Scanner;
 
 
@@ -14,6 +15,10 @@ public class PlayList implements KVStore {
   public PlayList(String str) {
     pl = new Hashtable<String, String>();
     unmarshal(str);
+  }
+  
+  public boolean containsSong(String song) {
+    return pl.containsKey(song);
   }
   
   public boolean add(String song, String url){
@@ -39,6 +44,25 @@ public class PlayList implements KVStore {
       return false;
     }
   }
+  
+  public String getUrl(String song) {
+    if(pl.containsKey(song)) {
+      return pl.get(song);
+    } else {
+      return "Do not exits!";
+    }
+  }
+  
+  public void print() {
+    System.out.println("++++++++++++++PlayList++++++++++++");
+    int i = 1;
+    for (Map.Entry<String, String> item : pl.entrySet()) {
+      System.out.println(i + ". Song Name: " + item.getKey() + "\tURL: " + item.getValue());
+    }
+    System.out.println("+++++++++++++++ End  +++++++++++++");
+  }
+  
+  
 
   public String marshal() {
     StringBuilder sb = new StringBuilder();

@@ -1,32 +1,40 @@
 package tpc;
 
-import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 
 import util.Constants;
 import util.Message;
-import framework.NetController;
 
 
 public class TPCSlave extends Thread {
   private TPCNode node;
-  private final int TIME_OUT = 10;  // 10 secs timeout
-  private Queue<Message> tpcReq;
+  private final int TIME_OUT = 6;  // 10 secs timeout
+  private Queue<Message> tpcReq = new ConcurrentLinkedQueue<Message> ();
   volatile boolean finished = false;
   boolean stateReq = false;
   boolean terminationResp = false;
+  
+  private boolean recovery;
 
 
   public TPCSlave(TPCNode node) {
     this.node = node;
     node.state = TPCNode.SlaveState.READY;
-    tpcReq = new ConcurrentLinkedQueue<Message> ();
+  }
+  
+  public TPCSlave(TPCNode node, boolean r) {
+    this.node = node;
+    recovery = r;
   }
 
   public void run() {
-    new Listener(node.nc).start();
+    new Listener().start();
+    if (recovery) {
+      runTermination();
+    }
+
     while (!finished) {
       if (tpcReq.isEmpty()) {
         try {
@@ -39,18 +47,34 @@ public class TPCSlave extends Thread {
         runTPC(m);
       }
     }
+    if (finished) {
+      logToScreen("Slave thread clean shutdown...");
+    }
   }
 
   public void rollback() {
-
+    logToScreen("Receive abort when voted yes... Sad...");
+    Message m = node.getPrevMessage();
+    if (m.getMessage().equals(Constants.ADD)) {
+      node.delete(m.getSong(), m.getUrl());
+    } else if (m.getMessage().equals(Constants.DEL)) {
+      node.add(m.getSong(), m.getUrl());
+    } else if (m.getMessage().startsWith(Constants.EDIT)) {
+      int index = m.getMessage().indexOf('@');
+      String oriUrl = m.getMessage().substring(index + 1);
+      node.edit(m.getSong(), oriUrl);
+    }
   }
-  
+
   public void shutdown () {
+    logToScreen("Clean Shutdown command received....");
+    logToScreen("Slave thread will shut down soon...");    
     finished = true;
   }
-  
+
   public void exitAndRunElection() {
     shutdown();
+    logToScreen("Shutting down current slave thread...");
     node.new Election().start();
   }
 
@@ -63,8 +87,6 @@ public class TPCSlave extends Thread {
    * vote request...
    * 
    */
-  
-  
   public void runTPC(Message m) {
     node.state = TPCNode.SlaveState.READY;
     if (executeRequest(m)) {
@@ -75,19 +97,30 @@ public class TPCSlave extends Thread {
         exitAndRunElection();
         return;
       case ABORTED :
-        rollback();
-        node.log(new Message(Constants.ABORT));
+        doAbort();
         return;
       case COMMITTABLE:
-        System.out.println("Commitable, continue");
+        logToScreen("Current State: Commitable, continue");
         break;
       default:
-        System.out.println("Unexpected State...Stop");
+        logToScreen("Unexpected State...Stop");
         return;
       }
     }
     phase3();
   }
+
+  public void doCommit() {
+    node.log(new Message(Constants.COMMIT));
+    node.printPlayList();
+  }
+  
+  public void doAbort() {
+    rollback();
+    node.log(new Message(Constants.ABORT));
+    node.printPlayList();
+  }
+  
   
   public void phase3 () {
     assert node.state == TPCNode.SlaveState.COMMITTABLE;
@@ -99,15 +132,15 @@ public class TPCSlave extends Thread {
       exitAndRunElection();
       return;
     case COMMITTED :
-      node.log(new Message(Constants.COMMIT));
+      doCommit();
       return;
     default:
       System.out.println("Unexpected State...Stop");
       return;
     }
   }
-  
-  
+
+
   /* 
    * Wait for commit from master
    */
@@ -117,7 +150,8 @@ public class TPCSlave extends Thread {
         return;
       }
       try {
-        Thread.sleep(1000);
+        logToScreen("Waiting for commit from master " + i + " ...");
+        Thread.sleep(node.getSleepTime());
       } catch (InterruptedException e) {
         e.printStackTrace();
       }
@@ -134,33 +168,33 @@ public class TPCSlave extends Thread {
         return;
       }
       try {
-        logToScreen("Waiting " + i);
-        Thread.sleep(1000);
+        logToScreen("Waiting for feedback after vote " + i + " ...");
+        Thread.sleep(node.getSleepTime());
       } catch (InterruptedException e) {
         e.printStackTrace();
       }
     }
     return;
   }
-  
+
   /* 
    * Wait for feedback from master
    */
   public void getStateReq(int time_out) {
-    for (int i = 0; i < time_out; i++) {
+    for (int i = 0; i < time_out * 2; i++) {
       if (stateReq) {
         return;
       }
       try {
-        logToScreen("Waiting StateReq" + i);
-        Thread.sleep(1000);
+        logToScreen("Waiting for stateReq " + i + " ...");
+        Thread.sleep(node.getSleepTime());
       } catch (InterruptedException e) {
         e.printStackTrace();
       }
     }
     return;
   }
-  
+
   /* 
    * Wait for feedback from master
    */
@@ -171,7 +205,7 @@ public class TPCSlave extends Thread {
       }
       try {
         logToScreen("Waiting terminationResp" + i);
-        Thread.sleep(1000);
+        Thread.sleep(node.getSleepTime());
       } catch (InterruptedException e) {
         e.printStackTrace();
       }
@@ -188,103 +222,105 @@ public class TPCSlave extends Thread {
       success = node.add(m.getSong(), m.getUrl());
     } else if (m.getMessage().equals(Constants.DEL)) {
       success = node.delete(m.getSong(), m.getUrl());
-    } else if (m.getMessage().equals(Constants.EDIT)) {
+    } else if (m.getMessage().startsWith(Constants.EDIT)) {
       success = node.edit(m.getSong(), m.getUrl());
     }
     logToScreen("Get Request: " + m.getMessage() + "\t" + success);
-
     Message reply = new Message(Constants.RESP, "", "", success? Constants.YES : Constants.NO);
-    logToScreen("Voted: " + reply.getMessage());
-    node.log(reply);
+    node.log(m);  // Log the request implies yes
     node.unicast(m.getSrc(), reply);
+    logToScreen("Voted: " + reply.getMessage());
     node.state = success ? TPCNode.SlaveState.UNCERTAIN : TPCNode.SlaveState.ABORTED;
     return success;
   }
-  
-  
+
+
   /*
    * Participant's algorithm of the 3PC termination protocol
    * paper page 253
    */
-  public void termination() {
+  public void runTermination() {
+    logToScreen("Start Slave's termination protocol");
     getStateReq(TIME_OUT);
     // timeout, no state request from master
     // run election again...
     if (!stateReq) {  
       exitAndRunElection();
+      return;
     }
-    reportState();
+    reportState(node.getMaster());
     TPCNode.SlaveState pState = node.state;
     getResponse(TIME_OUT);
     if (!terminationResp) {
       exitAndRunElection();
+      return;
     }
     if (pState != node.state) {
       switch (node.state) {
       case ABORTED :
-        rollback();
-        node.log(new Message(Constants.ABORT));
+        doAbort();
         break;
       case COMMITTED :
-        node.log(new Message(Constants.COMMIT));
+        doCommit();
         break;
       case COMMITTABLE:
         phase3();
+      default:
+        break;
       }
     }
     finishTernimation();
   }
-  
+
   public void finishTernimation() {
     stateReq = false;
     terminationResp = false;
   }
-  
-  public void reportState() {
+
+  public void reportState(int id) {
+    logToScreen("Report state ...");
     if (node.state == TPCNode.SlaveState.READY) {
       node.state = TPCNode.SlaveState.ABORTED;
     }
+    node.setMaster(id);
     Message stateReport = new Message(Constants.STATE_REP, "", "", node.state.name());
     node.unicast(node.getMaster(), stateReport);
   }
-  
+
 
   // inner Listener class
   class Listener extends Thread {
-    NetController nc;
-    public Listener (NetController nc) {
-      this.nc = nc;
-    }
-
     public void run() {
       while (!finished) {
-        List<String> buffer = nc.getReceivedMsgs();
-        for (String str : buffer) {
-          processMessage(str);
-        }
-        try {
-          Thread.sleep(500);
-        } catch (InterruptedException e) {
-          e.printStackTrace();
+        if (!node.messageQueue.isEmpty()) {
+          processMessage(node.messageQueue.poll());
+        } else {
+          try {
+            Thread.sleep(50);
+          } catch (InterruptedException e) {
+            e.printStackTrace();
+          }
         }
       }
     }
 
-    public void processMessage(String str) {
-      Message m = new Message ();
-      m.unmarshal(str);
-      if (m.isVoteReq()) {  // vote_req
-        //runTPC(m);
+    public void processMessage(Message m) {
+      if (m.isVoteReq()) { 
         tpcReq.offer(m);
       } else if (m.isStateReq()) {
+        //logToScreen("Got State Request");
         stateReq = true;
+      //  reportState(m.getSrc());
       } else if (m.isFeedback()) {
         processFeedback(m);
+      } else if (m.isMaster()) {
+        shutdown();
+        node.runAsMaster();
       }
     }
 
     public void processFeedback(Message m) {
-      System.out.println("Get Reply: " + m.getType());
+      //System.out.println("Get Reply: " + m.getType());
       if (m.getType().equals(Constants.COMMIT)) {
         assert node.state == TPCNode.SlaveState.COMMITTABLE;
         node.state = TPCNode.SlaveState.COMMITTED;
