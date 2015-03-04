@@ -196,7 +196,7 @@ public class TPCSlave extends Thread {
   }
 
   /* 
-   * Wait for feedback from master
+   * Wait for response from master in the termination protocol
    */
   public void getResponse(int time_out) {
     for (int i = 0; i < time_out; i++) {
@@ -250,7 +250,13 @@ public class TPCSlave extends Thread {
     }
     //reportState(node.getMaster());
     TPCNode.SlaveState pState = node.state;
-    getResponse(TIME_OUT);
+    if (node.state == TPCNode.SlaveState.UNCERTAIN) {
+      getResponse(TIME_OUT);
+    } else {
+      // wait longer for the uncertain node to switch ...
+      getResponse(2 * TIME_OUT);
+    }
+    // response from master in the termination protocol
     if (!terminationResp) {
       exitAndRunElection();
       return;

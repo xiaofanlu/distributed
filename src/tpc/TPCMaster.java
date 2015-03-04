@@ -204,9 +204,9 @@ public class TPCMaster extends Thread implements KVStore {
    * wait for ACK from all participants
    *  on timeout skip, ingore participant failures
    */
-  public boolean collectAck(int time_out) {
+  public boolean collectAck(int time_out, int size) {
     for (int i = 0; i < time_out; i++) {
-      if (ackList.size() == node.size()) {
+      if (ackList.size() == size) {
         logToScreen("All acks collected.");
         return true;  // no tme_out
       }
@@ -240,7 +240,7 @@ public class TPCMaster extends Thread implements KVStore {
         // send pre-commit to all participants
         doPreCommit(node.broadcastList);
         // wait for ACK from all participants
-        collectAck(TIME_OUT);
+        collectAck(TIME_OUT, node.size());
         doCommit();
         rst = true;
       } 
@@ -252,16 +252,6 @@ public class TPCMaster extends Thread implements KVStore {
     finishTPC();
     return rst;
   }
-
-
-
-  public void startTermination() {
-    logToScreen("Start Master's termination protocol");
-    stateReports = new ArrayList<Message> ();
-    uncertainList = new TreeSet<Integer>();
-    ackList = new TreeSet<Integer> ();
-  }
-  
 
 
 
@@ -317,6 +307,24 @@ public class TPCMaster extends Thread implements KVStore {
     
   }
   
+  public void startTermination() {
+    logToScreen("Start Master's termination protocol");
+    stateReports = new ArrayList<Message> ();
+    uncertainList = new TreeSet<Integer>();
+    ackList = new TreeSet<Integer> ();
+  }
+  
+  public void finishTermination() {
+    logToScreen("Finish Master's termination protocol");
+    stateReports = null;
+    uncertainList = null;
+    ackList = null;
+    node.printPlayList();
+    //
+  }
+  
+  
+  
   /*
    * The termmination protocol on page 252
    * 
@@ -336,14 +344,14 @@ public class TPCMaster extends Thread implements KVStore {
       break;
     case COMMITTABLE :
         doPreCommit(uncertainList);
-        // wait for ACK from all participants
-        collectAck(TIME_OUT);
+        // wait for ACK from all uncertain participants ...
+        collectAck(TIME_OUT, uncertainList.size());
         doCommit();
       break;
     default:
       break;
     }
-    stateReports = null;
+    finishTermination();
   }
 
   // inner Listener class
