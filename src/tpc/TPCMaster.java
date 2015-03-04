@@ -101,7 +101,7 @@ public class TPCMaster extends Thread implements KVStore {
   }
 
   public void logToScreen(String m) {
-    node.logToScreen(m);
+    node.logToScreen("M: " + m);
   }
 
   public void broadcast(Message m) {

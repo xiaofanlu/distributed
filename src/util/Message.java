@@ -82,7 +82,7 @@ public class Message implements Serializable {
   
   public TPCNode.SlaveState getState() {
     if (!msgType.equals(Constants.STATE_REP)) {
-      return TPCNode.SlaveState.READY;  // irrelevent state
+      return TPCNode.SlaveState.ABORTED;  // irrelevent state
     }
     return TPCNode.SlaveState.valueOf(message);
   }

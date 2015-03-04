@@ -42,7 +42,7 @@ public class TPCNode implements KVStore {
 
 
   public enum SlaveState {
-    READY, ABORTED, COMMITTED, COMMITTABLE, UNCERTAIN
+    ABORTED, COMMITTED, COMMITTABLE, UNCERTAIN
   };
   SlaveState state;
 
@@ -89,12 +89,7 @@ public class TPCNode implements KVStore {
   }
 
   public void start () {
-    new Listener().start();
-    
-    
-
-    
-    
+    new Listener().start();  
     if (getProcNum() == 0) {
       System.out.println(">>>> Run as Master");
       masterThread = new TPCMaster(this);
@@ -123,7 +118,7 @@ public class TPCNode implements KVStore {
   }
 
   public void logToScreen(String m) {
-    System.out.println("Node " + getProcNum() + ": " + m);
+    System.out.println("Node " + getProcNum() +  m);
   }
 
   @Override
@@ -225,9 +220,10 @@ public class TPCNode implements KVStore {
         // then this means node i is already the Master and no other master is available
         logToScreen("Single Master Left...");
       } else{
-        temp_viewNum = (viewNum + 1) % config.procNum; // Update viewNum
+        temp_viewNum = (viewNum + 1) % config.numProcesses; // Update viewNum
       }
-      temp_viewNum =  upList.upList.ceiling(temp_viewNum);// The least element in the UP set that is no smaller than viewNum
+      //logToScreen("view_num: " + viewNum + "\t temp_viewNum:" + temp_viewNum);
+      //temp_viewNum =  upList.upList.ceiling(temp_viewNum);// The least element in the UP set that is no smaller than viewNum
       if(temp_viewNum == null){
         logToScreen("Can't find new Master, error");
       } else {

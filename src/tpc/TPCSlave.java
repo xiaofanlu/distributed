@@ -21,7 +21,7 @@ public class TPCSlave extends Thread {
 
   public TPCSlave(TPCNode node) {
     this.node = node;
-    node.state = TPCNode.SlaveState.READY;
+    node.state = TPCNode.SlaveState.ABORTED;
   }
   
   public TPCSlave(TPCNode node, boolean r) {
@@ -79,7 +79,7 @@ public class TPCSlave extends Thread {
   }
 
   public void logToScreen(String m) {
-    node.logToScreen(m);
+    node.logToScreen("S: " + m);
   }
 
   /* 
@@ -88,7 +88,7 @@ public class TPCSlave extends Thread {
    * 
    */
   public void runTPC(Message m) {
-    node.state = TPCNode.SlaveState.READY;
+    node.state = TPCNode.SlaveState.ABORTED;
     if (executeRequest(m)) {
       getFeedback(TIME_OUT);
       switch (node.state) {
@@ -216,7 +216,7 @@ public class TPCSlave extends Thread {
 
 
   public boolean executeRequest(Message m) {
-    assert node.state == TPCNode.SlaveState.READY;
+    assert node.state == TPCNode.SlaveState.ABORTED;
     boolean success = false;
     if (m.getMessage().equals(Constants.ADD)) {
       success = node.add(m.getSong(), m.getUrl());
@@ -248,7 +248,7 @@ public class TPCSlave extends Thread {
       exitAndRunElection();
       return;
     }
-    reportState(node.getMaster());
+    //reportState(node.getMaster());
     TPCNode.SlaveState pState = node.state;
     getResponse(TIME_OUT);
     if (!terminationResp) {
@@ -279,9 +279,6 @@ public class TPCSlave extends Thread {
 
   public void reportState(int id) {
     logToScreen("Report state ...");
-    if (node.state == TPCNode.SlaveState.READY) {
-      node.state = TPCNode.SlaveState.ABORTED;
-    }
     node.setMaster(id);
     Message stateReport = new Message(Constants.STATE_REP, "", "", node.state.name());
     node.unicast(node.getMaster(), stateReport);
@@ -309,14 +306,19 @@ public class TPCSlave extends Thread {
         tpcReq.offer(m);
       } else if (m.isStateReq()) {
         //logToScreen("Got State Request");
-        stateReq = true;
-      //  reportState(m.getSrc());
+        if (node.state != TPCNode.SlaveState.ABORTED ||
+            node.state != TPCNode.SlaveState.COMMITTED) {
+          stateReq = true;
+        }
+        reportState(m.getSrc());
       } else if (m.isFeedback()) {
         processFeedback(m);
       } else if (m.isMaster()) {
         // TODO: update...
-        shutdown();
-        node.runAsMaster();
+        if (!finished) {
+          shutdown();
+          node.runAsMaster();
+        }
       }
     }
 
