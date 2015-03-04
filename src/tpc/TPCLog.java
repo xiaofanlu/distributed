@@ -160,13 +160,17 @@ public class TPCLog {
       break;
     case ABORTED:
       System.out.println("I am back aborted!! LOL...");
-      pendingReq = null;
+      if (pendingReq != null) {
+        node.log(new Message(Constants.ABORT));
+        pendingReq = null;
+      }
       node.printPlayList();
       break;
     case COMMITTED:
       System.out.println("I am back commited!! LOL...");
       if (pendingReq != null) {
         node.execute(pendingReq);
+        node.log(new Message(Constants.COMMIT));
       }
       node.printPlayList();
     }
