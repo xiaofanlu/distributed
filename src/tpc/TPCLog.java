@@ -109,6 +109,7 @@ public class TPCLog {
    */
   public void rebuildServer(){
     loadFromDisk();
+    System.out.println("To do: rebuild server ...");
   }
 
 }

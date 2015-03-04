@@ -314,6 +314,7 @@ public class TPCSlave extends Thread {
       } else if (m.isFeedback()) {
         processFeedback(m);
       } else if (m.isMaster()) {
+        // TODO: update...
         shutdown();
         node.runAsMaster();
       }

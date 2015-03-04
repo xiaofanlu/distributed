@@ -57,7 +57,7 @@ public class Config {
       deathAfterCount = Integer.MAX_VALUE;
     }
     if (prop.getProperty("delay") != null) {
-      delay = loadInt(prop, "delay");
+      delay = 5;//loadInt(prop, "delay");
     } else {
       delay = 1;
     }

@@ -1,5 +1,6 @@
 package tpc;
 
+import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.HashMap;
@@ -27,6 +28,10 @@ public class TPCNode implements KVStore {
   public TreeSet<Integer> broadcastList;
   //Set of Nodes that are operational,  including coordinator and processes
   public UpList upList;
+  
+  private String logName;
+  private String upListName;
+  private boolean recovery;
 
   ConcurrentLinkedQueue<Message> messageQueue = new ConcurrentLinkedQueue<Message> ();
 
@@ -52,18 +57,30 @@ public class TPCNode implements KVStore {
     }
     nc = new NetController(config);
 
-    String logName = "TPCLog" + getProcNum() + ".txt";
-    log = new TPCLog(logName, this);
-
-    broadcastList = new TreeSet<Integer>();
-    upList = new UpList();
+    logName = "TPCLog" + getProcNum() + ".txt";
+    File logFile = new File(logName);
+    // log found, recover from log
+    if(logFile.exists() && !logFile.isDirectory()) {
+      recovery = true;
+      log = new TPCLog(logName, this);
+      log.rebuildServer();
+    } else {
+      recovery = false;
+      log = new TPCLog(logName, this);
+    }
     
+    upListName = "TPCUpList" + getProcNum() + ".txt";
+    
+    broadcastList = new TreeSet<Integer>();
+    
+    upList = new UpList(config.numProcesses);
     for (int i = 0; i < config.numProcesses; i++) {
       if (i != config.procNum) {
         broadcastList.add(i);
       }
       upList.add(i);
     }
+    
     viewNum = upList.getMaster();
     //config.logger.log(Level.WARNING, "Server: Broadcast List");
 
@@ -73,6 +90,11 @@ public class TPCNode implements KVStore {
 
   public void start () {
     new Listener().start();
+    
+    
+
+    
+    
     if (getProcNum() == 0) {
       System.out.println(">>>> Run as Master");
       masterThread = new TPCMaster(this);
@@ -160,7 +182,7 @@ public class TPCNode implements KVStore {
       return pl.add(m.getSong(), m.getUrl());
     } else if  (m.getMessage().equals(Constants.DEL)) {
       return pl.delete(m.getSong(), m.getUrl());
-    } else if  (m.getMessage().equals(Constants.EDIT)) {
+    } else if  (m.getMessage().startsWith(Constants.EDIT)) {
       return pl.edit(m.getSong(), m.getUrl());
     }
     return false;

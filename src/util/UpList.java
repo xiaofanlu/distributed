@@ -1,17 +1,36 @@
 package util;
 
+import java.io.BufferedWriter;
+import java.io.FileWriter;
 import java.util.Arrays;
 import java.util.TreeSet;
 
+import framework.Config;
+
 public class UpList {
   public TreeSet<Integer> upList;
+  public String path;
+  private FileWriter fileWriter;
+  private BufferedWriter outStream;
   
-  public UpList() {
+  public UpList () {
     upList = new TreeSet<Integer> ();
   }
   
+  public UpList(Config config) {
+    //path = "TPCUpList" + config.getProcNum() + ".txt";
+
+  }
+  
+  public UpList(int numProcesses) {
+    upList = new TreeSet<Integer> ();
+    for (int i = 0; i < numProcesses; i++) {
+      upList.add(i);
+    }
+  }
+  
   public UpList(String list) {
-    this();
+    upList = new TreeSet<Integer> ();
     String[] items = list.split("\\$");
     //System.out.println(Arrays.toString(items));
     for (String item : items) {

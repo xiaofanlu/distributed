@@ -177,10 +177,6 @@ public class TPCMaster extends Thread implements KVStore {
     node.printPlayList();
   }
   
-  
-
-
-
 
   /*
    * wait for vote message from all participants
