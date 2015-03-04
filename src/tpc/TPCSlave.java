@@ -111,13 +111,17 @@ public class TPCSlave extends Thread {
   }
 
   public void doCommit() {
-    node.log(new Message(Constants.COMMIT));
+    if (!terminationResp || !node.log.getLastEntry().isCommit()) {
+      node.log(new Message(Constants.COMMIT));
+    }
     node.printPlayList();
   }
   
   public void doAbort() {
     rollback();
-    node.log(new Message(Constants.ABORT));
+    if (!terminationResp || !node.log.getLastEntry().isAbort()) {
+      node.log(new Message(Constants.ABORT));
+    }
     node.printPlayList();
   }
   
@@ -218,6 +222,7 @@ public class TPCSlave extends Thread {
   public boolean executeRequest(Message m) {
     assert node.state == TPCNode.SlaveState.ABORTED;
     boolean success = false;
+    node.log(m);  // log the vote_req 
     if (m.getMessage().equals(Constants.ADD)) {
       success = node.add(m.getSong(), m.getUrl());
     } else if (m.getMessage().equals(Constants.DEL)) {
@@ -227,7 +232,7 @@ public class TPCSlave extends Thread {
     }
     logToScreen("Get Request: " + m.getMessage() + "\t" + success);
     Message reply = new Message(Constants.RESP, "", "", success? Constants.YES : Constants.NO);
-    node.log(m);  // Log the request implies yes
+    node.log(reply); // log reply
     node.unicast(m.getSrc(), reply);
     logToScreen("Voted: " + reply.getMessage());
     node.state = success ? TPCNode.SlaveState.UNCERTAIN : TPCNode.SlaveState.ABORTED;
@@ -338,6 +343,7 @@ public class TPCSlave extends Thread {
       } else if (m.getType().equals(Constants.PRECOMMIT)) {
         assert node.state == TPCNode.SlaveState.UNCERTAIN;
         node.state = TPCNode.SlaveState.COMMITTABLE;
+        node.log(m);  // log precommit
       }
       if (stateReq) {
         terminationResp = true;

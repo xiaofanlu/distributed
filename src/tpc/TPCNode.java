@@ -19,7 +19,7 @@ import framework.NetController;
 public class TPCNode implements KVStore {
   Config config;
   NetController nc;
-  private TPCLog log;
+  TPCLog log;
   PlayList pl;
   private TPCMaster masterThread;
   private TPCSlave slaveThread;
@@ -28,13 +28,9 @@ public class TPCNode implements KVStore {
   public TreeSet<Integer> broadcastList;
   //Set of Nodes that are operational,  including coordinator and processes
   public UpList upList;
-  
-  private String logName;
-  private String upListName;
-  private boolean recovery;
 
+  //private String logName;
   ConcurrentLinkedQueue<Message> messageQueue = new ConcurrentLinkedQueue<Message> ();
-
 
   // for test
   HashMap<Integer, Integer> messageCount = new HashMap<Integer, Integer> ();
@@ -55,41 +51,30 @@ public class TPCNode implements KVStore {
     } catch (IOException e) {
       e.printStackTrace();
     }
+    // the order of initialization matters!!
+    state = SlaveState.ABORTED;
     nc = new NetController(config);
+    upList = new UpList(config);
+    initBroadcastList();
+    viewNum = upList.getMaster();
+    pl = new PlayList ();
+    new Listener().start();  
+    log = new TPCLog("TPCLog" + getProcNum() + ".txt", this);
+    start();
+  }
 
-    logName = "TPCLog" + getProcNum() + ".txt";
-    File logFile = new File(logName);
-    // log found, recover from log
-    if(logFile.exists() && !logFile.isDirectory()) {
-      recovery = true;
-      log = new TPCLog(logName, this);
-      log.rebuildServer();
-    } else {
-      recovery = false;
-      log = new TPCLog(logName, this);
-    }
-    
-    upListName = "TPCUpList" + getProcNum() + ".txt";
-    
+
+  public void initBroadcastList() {
     broadcastList = new TreeSet<Integer>();
-    
-    upList = new UpList(config.numProcesses);
     for (int i = 0; i < config.numProcesses; i++) {
       if (i != config.procNum) {
         broadcastList.add(i);
       }
-      upList.add(i);
     }
-    
-    viewNum = upList.getMaster();
-    //config.logger.log(Level.WARNING, "Server: Broadcast List");
-
-    pl = new PlayList ();
-    start();
   }
 
+
   public void start () {
-    new Listener().start();  
     if (getProcNum() == 0) {
       System.out.println(">>>> Run as Master");
       masterThread = new TPCMaster(this);
@@ -198,18 +183,18 @@ public class TPCNode implements KVStore {
   public boolean containsSong(String song) {
     return pl.containsSong(song);
   }
-  
+
   public void setMaster(int id) {
     viewNum = id;
     upList.setMaster(id);
   }
-  
+
   public void runAsMaster() {
     setMaster(getProcNum());
     masterThread = new TPCMaster(TPCNode.this, true);
     masterThread.start();
   }
-  
+
 
   public class Election extends Thread {
     public void run() {
@@ -268,19 +253,52 @@ public class TPCNode implements KVStore {
     public void processMessage(String str) {
       Message m = new Message ();
       m.unmarshal(str);
-      messageQueue.offer(m);
-      messageCount.put(m.getSrc(), messageCount.containsKey(m.getSrc()) ?
-          messageCount.get(m.getSrc()) + 1 : 1);
-      if (config.deathAfterProcess == m.getSrc()) {
-        if (config.deathAfterCount <= messageCount.get(m.getSrc())) {
-          logToScreen("Death after count triggered!!");
-          logToScreen("From Process: " + m.getSrc());
-          logToScreen("Message Count: " + messageCount.get(m.getSrc()));
-          System.exit(-1);
+      if (m.isStateQuery()) {
+        handleStateQuery(m);
+      } else if (m.isStateReply()) {
+        handleStateReply(m);
+      } else {
+        messageQueue.offer(m);
+        messageCount.put(m.getSrc(), messageCount.containsKey(m.getSrc()) ?
+            messageCount.get(m.getSrc()) + 1 : 1);
+        if (config.deathAfterProcess == m.getSrc()) {
+          if (config.deathAfterCount <= messageCount.get(m.getSrc())) {
+            logToScreen("Death after count triggered!!");
+            logToScreen("From Process: " + m.getSrc());
+            logToScreen("Message Count: " + messageCount.get(m.getSrc()));
+            System.exit(-1);
+          }
         }
+        System.out.println(">>>>>>>>>>>> Message from " + m.getSrc() + ": " + m.getType() + "\t" + m.getMessage());
       }
-      System.out.println(">>>>>>>>>>>> Message from " + m.getSrc() + ": " + m.getType() + "\t" + m.getMessage());
+    }
+   
+    public void handleStateQuery(Message m) {
+      switch (state) {
+      case UNCERTAIN:
+      case COMMITTABLE: 
+        logToScreen(": Still conducting tranction, unable to reply state query ...");
+        break;
+      case ABORTED:
+      case COMMITTED:
+        logToScreen(": Reply to state query from " + m.getSrc() + ": " + state.name());
+        Message stateReply = new Message(Constants.STATE_REPLY, "", "", state.name());
+        unicast(m.getSrc(), stateReply);
+      }
+    }
+    
+    public void handleStateReply(Message m) {
+      switch (state) {
+      case UNCERTAIN:
+      case COMMITTABLE: 
+        logToScreen(": Thanks for your state reply! New state: " + m.getMessage());
+        state = SlaveState.valueOf(m.getMessage());
+        break;
+      case ABORTED:
+      case COMMITTED:
+        logToScreen(": Decided alreay, ingore further state reply ...");       
+        break;
+      }
     }
   }
-
 }

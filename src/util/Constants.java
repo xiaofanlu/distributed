@@ -21,6 +21,8 @@ public class Constants {
   
   public static final String STATE_REP  = "statereport";
   
-  // YW: 
-  public static final String UR_SELECTED = "ur_seleted";
+  public static final String UR_SELECTED = "urseleted";
+  
+  public static final String STATE_QUERY = "statequery";
+  public static final String STATE_REPLY = "statereply";
 }

@@ -53,8 +53,29 @@ public class Message implements Serializable {
     return msgType.equals(Constants.STATE_REP);
   }
   
+  public boolean isStateQuery() {
+    return msgType.equals(Constants.STATE_QUERY);
+  }
+  
+  public boolean isStateReply() {
+    return msgType.equals(Constants.STATE_REPLY);
+  }
+  
+  
   public boolean isAck() {
     return msgType.equals(Constants.ACK);
+  }
+  
+  public boolean isAbort() {
+    return msgType.equals(Constants.ABORT);
+  }
+  
+  public boolean isCommit() {
+    return msgType.equals(Constants.COMMIT);
+  }
+  
+  public boolean isPreCommit() {
+    return msgType.equals(Constants.PRECOMMIT);
   }
   
   public boolean isResponse() {
@@ -70,7 +91,7 @@ public class Message implements Serializable {
   }
   
   public boolean votedYes() {
-    System.out.println(">>" + message + "<<");
+    //System.out.println(">>" + message + "<<");
     return msgType.equals(Constants.RESP) && message.equals(Constants.YES);
   }
   
@@ -152,6 +173,12 @@ public class Message implements Serializable {
     } catch (IOException e) {
       e.printStackTrace();
     }
+  }
+  
+  public void print() {
+    System.out.println("\n++++++++++++++START+++++++++++++");
+    System.out.println(marshal());
+    System.out.println("+++++++++++++++END++++++++++++++\n"); 
   }
   
 }

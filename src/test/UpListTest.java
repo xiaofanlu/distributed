@@ -17,11 +17,5 @@ public class UpListTest {
     assertEquals(ul.marshal(), "0$1$2");
   }
   
-  @Test
-  public void test2 () {
-    UpList ul = new UpList("0$1$2");
-    assertEquals(ul.getMaster(), 0);
-    assertEquals(ul.marshal(), "0$1$2");
-  }
-
+ 
 }

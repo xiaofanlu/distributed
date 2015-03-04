@@ -123,6 +123,7 @@ public class TPCMaster extends Thread implements KVStore {
   public void doCommit() {
     Message commit = new Message(Constants.COMMIT);
     node.log(commit);
+    node.state = TPCNode.SlaveState.COMMITTED;
     if (node.config.partialCommit >= 0) {
       logToScreen("Partial commit to " + node.config.partialCommit);
       node.unicast(node.config.partialCommit, commit);
@@ -137,6 +138,7 @@ public class TPCMaster extends Thread implements KVStore {
   public void doAbort(TreeSet<Integer> list) {
     Message abort = new Message(Constants.ABORT);
     node.log(abort);
+    node.state = TPCNode.SlaveState.ABORTED;
     node.broadcast(abort, list);
   }
 
@@ -166,6 +168,7 @@ public class TPCMaster extends Thread implements KVStore {
     ackList = new TreeSet<Integer> ();
     node.broadcast(m);
     node.log(m);
+    node.state = TPCNode.SlaveState.UNCERTAIN;
     logToScreen("Start 3PC " + m.getMessage());
   }
 
