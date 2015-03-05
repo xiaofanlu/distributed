@@ -65,6 +65,10 @@ public class Message implements Serializable {
     return msgType.equals(Constants.HEART_BEAT);
   }
   
+  public boolean isJoinReq() {
+    return msgType.equals(Constants.JOIN_REQ);
+  }
+  
   
   public boolean isAck() {
     return msgType.equals(Constants.ACK);

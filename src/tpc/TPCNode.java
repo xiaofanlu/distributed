@@ -29,10 +29,12 @@ public class TPCNode implements KVStore {
   public UpList upList;
 
   //private String logName;
-  ConcurrentLinkedQueue<Message> messageQueue = new ConcurrentLinkedQueue<Message> ();
+  ConcurrentLinkedQueue<Message> messageQueue =
+      new ConcurrentLinkedQueue<Message> ();
 
   // for test
-  HashMap<Integer, Integer> messageCount = new HashMap<Integer, Integer> ();
+  HashMap<Integer, Integer> messageCount =
+      new HashMap<Integer, Integer> ();
 
 
 
@@ -74,7 +76,7 @@ public class TPCNode implements KVStore {
 
 
   public void start () {
-    if (getProcNum() == 0) {
+    if (getProcNum() == 0 && !log.recovery) {
       System.out.println(">>>> Run as Master");
       masterThread = new TPCMaster(this);
       masterThread.start();
@@ -101,9 +103,7 @@ public class TPCNode implements KVStore {
     return viewNum;
   }
 
-  public void logToScreen(String m) {
-    System.out.println("Node " + getProcNum() +  m);
-  }
+
 
   @Override
   public boolean add(String song, String url) {
@@ -171,6 +171,14 @@ public class TPCNode implements KVStore {
     log.appendAndFlush(m);
   }
 
+  public void logToScreen(String m) {
+    System.out.println("Node " + getProcNum() + ": " +   m);
+  }
+
+  public void logToScreen2(String m) {
+    System.out.println("Node " + getProcNum() + m);
+  }
+
   public void printPlayList() {
     pl.print();
   }
@@ -178,6 +186,32 @@ public class TPCNode implements KVStore {
   public boolean containsSong(String song) {
     return pl.containsSong(song);
   }
+
+  public void rollback() {
+    logToScreen("Rollback last effective command ...");
+    Message m = log.getLastVoteReq();
+    if (m == null) {
+      logToScreen("No such command ... skip ...");
+      return;
+    }
+    m.print();
+    if (m.getMessage().equals(Constants.ADD) &&
+        containsSong(m.getSong())) {
+      logToScreen("Redo add ...");
+      delete(m.getSong(), m.getUrl());
+    } else if (m.getMessage().equals(Constants.DEL) &&
+        !containsSong(m.getSong())) {
+      logToScreen("Redo delete ...");
+      add(m.getSong(), m.getUrl());
+    } else if (m.getMessage().startsWith(Constants.EDIT) && 
+        pl.getUrl(m.getSong()).equals(m.getUrl())) {
+      logToScreen("Redo edit ...");
+      int index = m.getMessage().indexOf('@');
+      String oriUrl = m.getMessage().substring(index + 1);
+      edit(m.getSong(), oriUrl);
+    }
+  }
+
 
   public void setMaster(int id) {
     viewNum = id;
@@ -193,30 +227,31 @@ public class TPCNode implements KVStore {
 
   public class Election extends Thread {
     public void run() {
-      logToScreen("Running election protocol...");
+      logToScreen(": Running election protocol...");
       Integer temp_viewNum = viewNum;
       if(upList.size() == 1 & viewNum == config.procNum){
         // Node is the only node in the network, If the node itself is always in UpList,
         // then this means node i is already the Master and no other master is available
-        logToScreen("Single Master Left...");
+        logToScreen(": Single Master Left...");
       } else{
         temp_viewNum = (viewNum + 1) % config.numProcesses; // Update viewNum
       }
       //logToScreen("view_num: " + viewNum + "\t temp_viewNum:" + temp_viewNum);
-      //temp_viewNum =  upList.upList.ceiling(temp_viewNum);// The least element in the UP set that is no smaller than viewNum
+      //temp_viewNum =  upList.upList.ceiling(temp_viewNum);
+      // The least element in the UP set that is no smaller than viewNum
       if(temp_viewNum == null){
-        logToScreen("Can't find new Master, error");
+        logToScreen("Error: Can't find new Master");
       } else {
         upList.remove(viewNum);
         viewNum = temp_viewNum;
         if(temp_viewNum == config.procNum){
-          logToScreen("Self selected as Master...");
+          logToScreen("Elected >>> Self <<<  as Master...");
           logToScreen("Invoke coordinator's algorithm of termination protocol...");
           masterThread = new TPCMaster(TPCNode.this, true);
           masterThread.start();
         }
         else{
-          logToScreen("Select >>> " + viewNum +" <<< as Master ...");
+          logToScreen("Elected >>> " + viewNum +" <<< as Master ...");
           logToScreen("Invoke participant's algorithm of termination protocol...");
           //Message msg = new Message(Constants.UR_SELECTED);
           //unicast(temp_viewNum,msg);
@@ -252,6 +287,8 @@ public class TPCNode implements KVStore {
         handleStateQuery(m);
       } else if (m.isStateReply()) {
         handleStateReply(m);
+      } else if (m.isJoinReq()) {
+        upList.add(m.getSrc()); 
       } else {
         messageQueue.offer(m);
         messageCount.put(m.getSrc(), messageCount.containsKey(m.getSrc()) ?
@@ -265,7 +302,8 @@ public class TPCNode implements KVStore {
           }
         }
         if (!m.isHeartBeat()) {
-          System.out.println(">>>>>>>>>>>> Message from " + m.getSrc() + ": " + m.getType() + "\t" + m.getMessage());
+          System.out.println(">>>>>>>>>>>> Message from " + 
+              m.getSrc() + ": " + m.getType() + "\t" + m.getMessage());
         }
       }
     }
@@ -274,12 +312,15 @@ public class TPCNode implements KVStore {
       switch (state) {
       case UNCERTAIN:
       case COMMITTABLE: 
-        //logToScreen(": Still conducting tranction, unable to reply state query ...");
+        //logToScreen(": Still conducting tranction, 
+        // unable to reply state query ...");
         break;
       case ABORTED:
       case COMMITTED:
-        logToScreen(": Reply to state query from " + m.getSrc() + ": " + state.name());
-        Message stateReply = new Message(Constants.STATE_REPLY, "", "", state.name());
+        logToScreen("Reply to state query from " + 
+            m.getSrc() + ": " + state.name());
+        Message stateReply = 
+            new Message(Constants.STATE_REPLY, "", "", state.name());
         unicast(m.getSrc(), stateReply);
       }
     }
@@ -288,7 +329,8 @@ public class TPCNode implements KVStore {
       switch (state) {
       case UNCERTAIN:
       case COMMITTABLE: 
-        logToScreen(": Thanks for your state reply! New state: " + m.getMessage());
+        logToScreen("Thanks for your state reply! New state: " 
+            + m.getMessage());
         state = SlaveState.valueOf(m.getMessage());
         break;
       case ABORTED:

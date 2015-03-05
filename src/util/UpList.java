@@ -65,7 +65,6 @@ public class UpList {
     }
   }
   
-
   public void add(int i) {
     upList.add(i);
     logToFile();
@@ -105,7 +104,9 @@ public class UpList {
     for (int i : upList) {
       sb.append(i + "$");
     }
-    sb.deleteCharAt(sb.length() - 1);
+    if (upList.size() > 0) {
+      sb.deleteCharAt(sb.length() - 1);
+    }
     return sb.toString();
   }
 }

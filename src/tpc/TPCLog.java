@@ -59,11 +59,18 @@ public class TPCLog {
     return null;
   }
 
+  /**
+   * Get last vote request which has no preceding 
+   * Abort or Commit
+   * @return last entry put into the log
+   */
   public Message getLastVoteReq() {
     int i = entries.size() - 1;
     while (i >= 0) {
       if (entries.get(i).isVoteReq()) {
         return entries.get(i);
+      } else if (entries.get(i).isAbort() || entries.get(i).isCommit()) {
+        return null;
       }
       i--;
     }
@@ -133,6 +140,7 @@ public class TPCLog {
       m.print();
       if (m.isVoteReq()) {
         pendingReq = m;
+        node.state = TPCNode.SlaveState.ABORTED;
       } else if (m.isAbort()) {
         pendingReq = null;
         node.state = TPCNode.SlaveState.ABORTED;
@@ -186,5 +194,6 @@ public class TPCLog {
       }
       node.printPlayList();
     }
+    node.broadcast(new Message(Constants.JOIN_REQ));
   }
 }

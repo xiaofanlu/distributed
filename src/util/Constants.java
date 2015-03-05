@@ -27,6 +27,8 @@ public class Constants {
   public static final String STATE_REPLY = "statereply";
   
   public static final String HEART_BEAT = "imalive";
+  public static final String JOIN_REQ = "imaback";
+
   
   //public static final int HEART_BEAT_GAP = 3000;
 

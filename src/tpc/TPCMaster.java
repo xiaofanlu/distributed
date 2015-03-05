@@ -22,6 +22,9 @@ public class TPCMaster extends Thread implements KVStore {
 
   public TPCMaster(TPCNode node) {
     this.node = node;
+    node.state = TPCNode.SlaveState.ABORTED;
+    // just to create an empty log
+    node.log(new Message(Constants.ABORT));
   }
 
   public TPCMaster(TPCNode node, boolean r) {
@@ -41,7 +44,7 @@ public class TPCMaster extends Thread implements KVStore {
     while (true) {
       System.out.print("Enter the command, 1 for add, 2 for del, 3 for edit: ");
       while (!sc.hasNextInt()) {
-        sc.next();
+        sc.nextLine();
         System.out.print("Enter the command, 1 for add, 2 for del, 3 for edit: ");  
       }
       int command = sc.nextInt();
@@ -49,10 +52,11 @@ public class TPCMaster extends Thread implements KVStore {
         System.out.println("Wrong command code!!");
         continue;
       }
+      sc.nextLine();
       System.out.print("Enter song name: ");
-      String song = sc.next();
+      String song = sc.nextLine();
       System.out.print("Enter song url: ");
-      String url = sc.next();
+      String url = sc.nextLine();
       switch(command) {
       case 1:  add(song, url);
       break;
@@ -73,6 +77,11 @@ public class TPCMaster extends Thread implements KVStore {
   @Override
   public boolean add(String song, String url) {
     logToScreen("Add " + song + "\t" +  url);
+    if (node.containsSong(song)) {
+      logToScreen("Invaid Command, " + song + " is already there");
+      logToScreen("Consider Edit instead :)");
+      return false;
+    }
     Message m = new  Message (Constants.VOTE_REQ, song, url, Constants.ADD);
     return threePC(m);
   }
@@ -106,7 +115,7 @@ public class TPCMaster extends Thread implements KVStore {
   }
 
   public void logToScreen(String m) {
-    node.logToScreen("M: " + m);
+    node.logToScreen2("M: " + m);
   }
 
   public void broadcast(Message m) {
@@ -150,6 +159,7 @@ public class TPCMaster extends Thread implements KVStore {
   }
 
   public void doAbort(TreeSet<Integer> list) {
+    node.rollback();
     Message abort = new Message(Constants.ABORT);
     node.log(abort);
     node.state = TPCNode.SlaveState.ABORTED;
@@ -274,6 +284,7 @@ public class TPCMaster extends Thread implements KVStore {
 
   public void collectStateReport (int time_out) {
     for (int i = 0; i < time_out; i++) {
+      broadcast(new Message(Constants.STATE_REQ));
       if (stateReports.size() == node.size()) {
         return;
       } else {
@@ -348,7 +359,7 @@ public class TPCMaster extends Thread implements KVStore {
    */
   public void runTermination() {
     startTermination();
-    broadcast(new Message(Constants.STATE_REQ));
+ //   broadcast(new Message(Constants.STATE_REQ));
     collectStateReport(TIME_OUT);
     switch (countStateReport()) {
     case ABORTED : 

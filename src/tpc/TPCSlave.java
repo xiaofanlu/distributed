@@ -16,6 +16,7 @@ public class TPCSlave extends Thread {
   private Queue<Message> tpcReq = new ConcurrentLinkedQueue<Message> ();
   volatile boolean finished = false;
   boolean stateReq = false;
+  boolean expectStateReq = false;
   boolean terminationResp = false;
   HeartBeatTimer hbt = new HeartBeatTimer();
 
@@ -37,7 +38,7 @@ public class TPCSlave extends Thread {
   public void run() {
     new Listener().start();
     hbt.start();
-    
+
     if (recovery) {
       runTermination();
     }
@@ -59,28 +60,12 @@ public class TPCSlave extends Thread {
     }
   }
 
-  public void rollback() {
-    logToScreen("Receive abort when voted yes... Sad... Rollback...");
-    Message m = node.log.getLastVoteReq();
-    m.print();
-    if (m.getMessage().equals(Constants.ADD)) {
-      logToScreen("Redo add ...");
-      node.delete(m.getSong(), m.getUrl());
-    } else if (m.getMessage().equals(Constants.DEL)) {
-      logToScreen("Redo delete ...");
-      node.add(m.getSong(), m.getUrl());
-    } else if (m.getMessage().startsWith(Constants.EDIT)) {
-      logToScreen("Redo edit ...");
-      int index = m.getMessage().indexOf('@');
-      String oriUrl = m.getMessage().substring(index + 1);
-      node.edit(m.getSong(), oriUrl);
-    }
-  }
 
   public void shutdown () {
     logToScreen("Clean Shutdown command received....");
     logToScreen("Slave thread will shut down soon...");    
     finished = true;
+    hbt.cancel();
   }
 
   public void exitAndRunElection() {
@@ -90,7 +75,7 @@ public class TPCSlave extends Thread {
   }
 
   public void logToScreen(String m) {
-    node.logToScreen("S: " + m);
+    node.logToScreen2("S: " + m);
   }
 
   /* 
@@ -129,13 +114,12 @@ public class TPCSlave extends Thread {
   }
 
   public void doAbort() {
-    rollback();
+    node.rollback();
     if (!terminationResp || !node.log.getLastEntry().isAbort()) {
       node.log(new Message(Constants.ABORT));
     }
     node.printPlayList();
   }
-
 
   public void phase3 () {
     assert node.state == TPCNode.SlaveState.COMMITTABLE;
@@ -165,6 +149,7 @@ public class TPCSlave extends Thread {
         return;
       }
       try {
+        hbt.setTimeout((time_out + 1) *  node.getSleepTime());
         logToScreen("Waiting for commit from master " + i + " ...");
         Thread.sleep(node.getSleepTime());
       } catch (InterruptedException e) {
@@ -184,6 +169,7 @@ public class TPCSlave extends Thread {
       }
       try {
         logToScreen("Waiting for feedback after vote " + i + " ...");
+        hbt.setTimeout((time_out + 1) *  node.getSleepTime());
         Thread.sleep(node.getSleepTime());
       } catch (InterruptedException e) {
         e.printStackTrace();
@@ -196,12 +182,14 @@ public class TPCSlave extends Thread {
    * Wait for feedback from master
    */
   public void getStateReq(int time_out) {
+    expectStateReq = true;
     for (int i = 0; i < time_out * 2; i++) {
       if (stateReq) {
         return;
       }
       try {
         logToScreen("Waiting for stateReq " + i + " ...");
+        hbt.setTimeout((time_out * 2 + 1) * node.getSleepTime());
         Thread.sleep(node.getSleepTime());
       } catch (InterruptedException e) {
         e.printStackTrace();
@@ -219,7 +207,8 @@ public class TPCSlave extends Thread {
         return;
       }
       try {
-        logToScreen("Waiting terminationResp" + i);
+        logToScreen("Waiting for termination response " + i);
+        hbt.setTimeout((time_out + 1) *  node.getSleepTime());
         Thread.sleep(node.getSleepTime());
       } catch (InterruptedException e) {
         e.printStackTrace();
@@ -277,6 +266,7 @@ public class TPCSlave extends Thread {
       exitAndRunElection();
       return;
     }
+    /* if state change */
     if (pState != node.state) {
       switch (node.state) {
       case ABORTED :
@@ -288,6 +278,16 @@ public class TPCSlave extends Thread {
       case COMMITTABLE:
         phase3();
       default:
+        break;
+      }
+    } else {
+      switch (node.state) {
+      case ABORTED :
+      case COMMITTED :
+        node.printPlayList();
+        break;
+      default:
+        logToScreen(">>>>>>>>>>>>> Warning: Unexpected state ...");
         break;
       }
     }
@@ -326,12 +326,10 @@ public class TPCSlave extends Thread {
     public void processMessage(Message m) {
       if (m.isVoteReq()) { 
         tpcReq.offer(m);
-      } else if (m.isStateReq()) {
+      } else if (m.isStateReq() && expectStateReq) {
         //logToScreen("Got State Request");
-        if (node.state != TPCNode.SlaveState.ABORTED ||
-            node.state != TPCNode.SlaveState.COMMITTED) {
-          stateReq = true;
-        }
+        stateReq = true;
+        expectStateReq = false;
         reportState(m.getSrc());
       } else if (m.isFeedback()) {
         processFeedback(m);
@@ -342,6 +340,13 @@ public class TPCSlave extends Thread {
           node.runAsMaster();
         }
       } else if (m.isHeartBeat()) {
+        if (m.getSrc() != node.getMaster()) {
+          logToScreen("Heart beat not from current view num...");
+          logToScreen("Update current master to >>> " + m.getSrc() + "<<<");
+          if (node.log.recovery) {
+            node.viewNum = m.getSrc();
+          }
+        }
         hbt.reset();
       }
     }
@@ -365,6 +370,12 @@ public class TPCSlave extends Thread {
   }
 
 
+  public Timer startTiming() {
+    Timer timer = new Timer();
+    timer.schedule(new TimeoutTask(), TIME_OUT * node.getDelayTime() );
+    return timer;
+  }
+
   public class HeartBeatTimer extends Thread{
     public TimeoutTask task;
     public Timer timer;
@@ -375,34 +386,38 @@ public class TPCSlave extends Thread {
       task = new TimeoutTask();
     }
 
+    public void cancel () {
+      task.cancel();
+    }
+
     public void reset() {
-      task.SetTimeout(node.getDelayTime() * 9);
+      setTimeout(node.getDelayTime() * 9);
     }
 
     @Override
     public void run(){
-      task.SetTimeout(node.getDelayTime() * 10);
+      setTimeout(node.getDelayTime() * 20);
     }
 
-    public class TimeoutTask extends TimerTask{
-      public void SetTimeout(long delay){
-        task.cancel();
-        task = new TimeoutTask();
-        timer.schedule(task, delay);
-      }
+    public void setTimeout(long delay){
+      task.cancel();
+      task = new TimeoutTask();
+      timer.schedule(task, delay);
+    }
+  }
 
+  public class TimeoutTask extends TimerTask{
 
-      /*
-       * (non-Javadoc)
-       * @see java.util.TimerTask#run()
-       * Failed to receive heart-beat within some time. 
-       * Election and termination. 
-       */
-      @Override
-      public void run(){
-        logToScreen(" >>> Heart Beat time out!!!");
-        exitAndRunElection();
-      }
+    /*
+     * (non-Javadoc)
+     * @see java.util.TimerTask#run()
+     * Failed to receive heart-beat within some time. 
+     * Election and termination. 
+     */
+    @Override
+    public void run(){
+      logToScreen(" >>> time out!!! Coordinator must be down...");
+      exitAndRunElection();
     }
   }
 }
