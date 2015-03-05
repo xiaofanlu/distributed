@@ -295,15 +295,17 @@ public class TPCSlave extends Thread {
   }
 
   public void finishTernimation() {
+    expectStateReq = false;
     stateReq = false;
     terminationResp = false;
   }
 
   public void reportState(int id) {
     logToScreen("Report state ...");
-    node.setMaster(id);
+    //node.setMaster(id);
+    node.viewNum = id;
     Message stateReport = new Message(Constants.STATE_REP, "", "", node.state.name());
-    node.unicast(node.getMaster(), stateReport);
+    node.unicast(id, stateReport);
   }
 
 
@@ -326,26 +328,28 @@ public class TPCSlave extends Thread {
     public void processMessage(Message m) {
       if (m.isVoteReq()) { 
         tpcReq.offer(m);
-      } else if (m.isStateReq() && expectStateReq) {
+      } else if (m.isStateReq()) {
         //logToScreen("Got State Request");
-        stateReq = true;
-        expectStateReq = false;
+        if (expectStateReq) {
+          stateReq = true;
+          expectStateReq = false;
+        }
         reportState(m.getSrc());
       } else if (m.isFeedback()) {
         processFeedback(m);
       } else if (m.isMaster()) {
         // TODO: update...
+        /*
         if (!finished) {
           shutdown();
           node.runAsMaster();
         }
+         */
       } else if (m.isHeartBeat()) {
         if (m.getSrc() != node.getMaster()) {
           logToScreen("Heart beat not from current view num...");
           logToScreen("Update current master to >>> " + m.getSrc() + "<<<");
-          if (node.log.recovery) {
-            node.viewNum = m.getSrc();
-          }
+          node.viewNum = m.getSrc();
         }
         hbt.reset();
       }
@@ -417,7 +421,7 @@ public class TPCSlave extends Thread {
     @Override
     public void run(){
       logToScreen(" >>> time out!!! Coordinator must be down...");
-      exitAndRunElection();
+      //exitAndRunElection();
     }
   }
 }

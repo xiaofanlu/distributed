@@ -35,44 +35,60 @@ public class TPCMaster extends Thread implements KVStore {
   public void run() {
     new Listener().start();
     new HeartBeater().start();
-    
+
     if (recovery) {
       runTermination();
     }
-    @SuppressWarnings("resource")
     Scanner sc = new Scanner(System.in);
     while (true) {
-      System.out.print("Enter the command, 1 for add, 2 for del, 3 for edit: ");
-      while (!sc.hasNextInt()) {
-        sc.nextLine();
-        System.out.print("Enter the command, 1 for add, 2 for del, 3 for edit: ");  
-      }
-      int command = sc.nextInt();
-      if (command <= 0 || command > 3) {
-        System.out.println("Wrong command code!!");
+      int command = getIntInput(sc, "Enter num for command (" + 
+          "1: add, 2: del, 3: edit, 4: playList, 5: log) : ");
+      if (command <= 0 || command > 5) {
+        System.out.println("Invalid command code!!");
         continue;
       }
-      sc.nextLine();
-      System.out.print("Enter song name: ");
-      String song = sc.nextLine();
-      System.out.print("Enter song url: ");
-      String url = sc.nextLine();
-      switch(command) {
-      case 1:  add(song, url);
-      break;
-      case 2:  delete(song, url);
-      break;
-      case 3:  edit(song, url);
-      break;
-      }
-      try {
-        Thread.sleep(500);
-      } catch (InterruptedException e) {
-        e.printStackTrace();
+      if (command <= 3 ) {
+        System.out.print("Enter song name: ");
+        String song = sc.nextLine();
+        System.out.print("Enter song url: ");
+        String url = sc.nextLine();
+        switch(command) {
+        case 1:  add(song, url);
+        break;
+        case 2:  delete(song, url);
+        break;
+        case 3:  edit(song, url);
+        break;
+        }
+        try {
+          Thread.sleep(500);
+        } catch (InterruptedException e) {
+          e.printStackTrace();
+        }
+      } else {
+        int id = getIntInput(sc, "Enter the node id: ");
+        if (command == 4) {
+          node.unicastNow(id, new Message(Constants.PRINT, "", "", 
+              Constants.PLAYLIST));
+          //node.printPlayList();
+        } else {
+          node.unicastNow(id, new Message(Constants.PRINT, "", "", 
+              Constants.LOGLIST));
+        }
       }
     }
   }
 
+  public int getIntInput(Scanner sc, String prop) {
+    System.out.print(prop);
+    while (!sc.hasNextInt()) {
+      sc.nextLine();
+      System.out.print(prop);  
+    }
+    int num = sc.nextInt();
+    sc.nextLine();
+    return num;
+  }
 
   @Override
   public boolean add(String song, String url) {
@@ -283,8 +299,9 @@ public class TPCMaster extends Thread implements KVStore {
 
 
   public void collectStateReport (int time_out) {
+    broadcast(new Message(Constants.STATE_REQ));
+    
     for (int i = 0; i < time_out; i++) {
-      broadcast(new Message(Constants.STATE_REQ));
       if (stateReports.size() == node.size()) {
         return;
       } else {
@@ -340,6 +357,12 @@ public class TPCMaster extends Thread implements KVStore {
     stateReports = new ArrayList<Message> ();
     uncertainList = new TreeSet<Integer>();
     ackList = new TreeSet<Integer> ();
+    // wait for all thread to get ready
+    try {
+      Thread.sleep(node.getSleepTime());
+    } catch (InterruptedException e) {
+      e.printStackTrace();
+    }
   }
 
   public void finishTermination() {
@@ -359,7 +382,7 @@ public class TPCMaster extends Thread implements KVStore {
    */
   public void runTermination() {
     startTermination();
- //   broadcast(new Message(Constants.STATE_REQ));
+    //   broadcast(new Message(Constants.STATE_REQ));
     collectStateReport(TIME_OUT);
     switch (countStateReport()) {
     case ABORTED : 
@@ -412,20 +435,20 @@ public class TPCMaster extends Thread implements KVStore {
       }
     }
   }
-  
+
   // inner Listener class
   class HeartBeater extends Thread {
     public void run() {
       while (true) {
-          node.broadcast(new Message(Constants.HEART_BEAT));
-          try {
-            Thread.sleep(node.getDelayTime());
-          } catch (InterruptedException e) {
-            e.printStackTrace();
-          }
+        node.broadcast(new Message(Constants.HEART_BEAT));
+        try {
+          Thread.sleep(node.getDelayTime());
+        } catch (InterruptedException e) {
+          e.printStackTrace();
         }
       }
     }
+  }
 
 
 }

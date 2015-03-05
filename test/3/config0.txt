@@ -1,4 +1,4 @@
-NumProcesses = 6
+NumProcesses = 3
 port0 = 10000
 port1 = 10001
 port2 = 10002
@@ -13,6 +13,7 @@ host4 = 127.0.0.1
 host5 = 127.0.0.1
 ProcNum = 0
 partialCommit = -1
+partialPreCommit = -1
 deathAfterProcess = -1
 deathAfterCount = 100
 delay = 1

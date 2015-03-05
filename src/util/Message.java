@@ -69,6 +69,9 @@ public class Message implements Serializable {
     return msgType.equals(Constants.JOIN_REQ);
   }
   
+  public boolean isPrintReq() {
+    return msgType.equals(Constants.PRINT);
+  }
   
   public boolean isAck() {
     return msgType.equals(Constants.ACK);

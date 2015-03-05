@@ -76,8 +76,15 @@ public class TPCLog {
     }
     return null;
   }
-  
-  
+
+  public void printLog () {
+    for (Message m : entries) {
+      m.print();
+    }
+  }
+
+
+
   /**
    * Load log from persistent storage at logPath.
    */
@@ -135,7 +142,6 @@ public class TPCLog {
   public void rebuildServer(){
     loadFromDisk();
     System.out.println("Rebuilding server ...");
-    System.out.println("Initial state: " + node.state.name());
     for (Message m : entries) {
       m.print();
       if (m.isVoteReq()) {
@@ -163,7 +169,7 @@ public class TPCLog {
     System.out.println("Rebuild server finished!!");
     lastStep();
   }
-  
+
   public void lastStep() {
     switch (node.state) {
     case UNCERTAIN:
@@ -181,7 +187,9 @@ public class TPCLog {
     case ABORTED:
       System.out.println("I am back aborted!! LOL...");
       if (pendingReq != null) {
-        appendAndFlush(new Message(Constants.ABORT));
+        if (!getLastEntry().isAbort()) {
+          appendAndFlush(new Message(Constants.ABORT));
+        }
         pendingReq = null;
       }
       node.printPlayList();
@@ -190,7 +198,9 @@ public class TPCLog {
       System.out.println("I am back commited!! LOL...");
       if (pendingReq != null) {
         node.execute(pendingReq);
-        appendAndFlush(new Message(Constants.COMMIT));
+        if (!getLastEntry().isCommit()) {
+          appendAndFlush(new Message(Constants.COMMIT));
+        }
       }
       node.printPlayList();
     }

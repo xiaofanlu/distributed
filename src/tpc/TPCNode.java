@@ -4,6 +4,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Scanner;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
@@ -103,8 +104,6 @@ public class TPCNode implements KVStore {
     return viewNum;
   }
 
-
-
   @Override
   public boolean add(String song, String url) {
     return pl.add(song, url);
@@ -131,14 +130,18 @@ public class TPCNode implements KVStore {
       e.printStackTrace();
     }
     for (int i : list) {
-      unicastNoDealy(i, m);
+      unicastNow(i, m);
     }
   }
 
-  public void unicastNoDealy(int dst, Message m) {
-    m.setSrc(getProcNum());
-    m.setDst(dst);
-    nc.sendMsg(dst, m.marshal());
+  public void unicastNow(int dst, Message m) {
+    if (dst < config.numProcesses && dst >= 0) {
+      m.setSrc(getProcNum());
+      m.setDst(dst);
+      nc.sendMsg(dst, m.marshal());
+    } else {
+      logToScreen("Invaild Destination Number, ignore...");
+    }
   }
 
   public void unicast(int dst, Message m) {
@@ -147,9 +150,7 @@ public class TPCNode implements KVStore {
     } catch (InterruptedException e) {
       e.printStackTrace();
     }
-    m.setSrc(getProcNum());
-    m.setDst(dst);
-    nc.sendMsg(dst, m.marshal());
+    unicastNow(dst, m);
   }
 
   public int size() {
@@ -255,10 +256,10 @@ public class TPCNode implements KVStore {
           logToScreen("Invoke participant's algorithm of termination protocol...");
           //Message msg = new Message(Constants.UR_SELECTED);
           //unicast(temp_viewNum,msg);
-          Message msg = new Message(Constants.UR_SELECTED);
+         // Message msg = new Message(Constants.UR_SELECTED);
           slaveThread = new TPCSlave(TPCNode.this, true);
           slaveThread.start();
-          unicast(viewNum, msg);
+         // unicast(viewNum, msg);
         }
       }
     }
@@ -289,19 +290,29 @@ public class TPCNode implements KVStore {
         handleStateReply(m);
       } else if (m.isJoinReq()) {
         upList.add(m.getSrc()); 
-      } else {
-        messageQueue.offer(m);
-        messageCount.put(m.getSrc(), messageCount.containsKey(m.getSrc()) ?
-            messageCount.get(m.getSrc()) + 1 : 1);
-        if (config.get("deathAfterProcess") == m.getSrc()) {
-          if (config.get("deathAfterCount") <= messageCount.get(m.getSrc())) {
-            logToScreen("Death after count triggered!!");
-            logToScreen("From Process: " + m.getSrc());
-            logToScreen("Message Count: " + messageCount.get(m.getSrc()));
-            System.exit(-1);
-          }
+      } else if (m.isPrintReq()) {
+        if (m.getMessage().equals(Constants.PLAYLIST)) {
+          printPlayList();
+        } else if (m.getMessage().equals(Constants.LOGLIST)) {
+          log.printLog();
         }
+      }
+      else {
+        messageQueue.offer(m);
+        messageCount.put(m.getSrc(), 
+            messageCount.containsKey(m.getSrc()) ?
+                messageCount.get(m.getSrc()) + 1 : 1);
         if (!m.isHeartBeat()) {
+          if (config.get("deathAfterProcess") == m.getSrc()) {
+            if (config.get("deathAfterCount") <=
+                messageCount.get(m.getSrc())) {
+              logToScreen("Death after count triggered!!");
+              logToScreen("From Process: " + m.getSrc());
+              logToScreen("Message Count: " + 
+                  messageCount.get(m.getSrc()));
+              System.exit(-1);
+            }
+          }
           System.out.println(">>>>>>>>>>>> Message from " + 
               m.getSrc() + ": " + m.getType() + "\t" + m.getMessage());
         }
