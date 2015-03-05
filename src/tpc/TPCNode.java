@@ -1,6 +1,5 @@
 package tpc;
 
-import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.HashMap;
@@ -174,10 +173,6 @@ public class TPCNode implements KVStore {
 
   public void printPlayList() {
     pl.print();
-  }
-
-  public Message getPrevMessage () {
-    return log.getLastEntry();
   }
 
   public boolean containsSong(String song) {

@@ -59,6 +59,18 @@ public class TPCLog {
     return null;
   }
 
+  public Message getLastVoteReq() {
+    int i = entries.size() - 1;
+    while (i >= 0) {
+      if (entries.get(i).isVoteReq()) {
+        return entries.get(i);
+      }
+      i--;
+    }
+    return null;
+  }
+  
+  
   /**
    * Load log from persistent storage at logPath.
    */
@@ -161,7 +173,7 @@ public class TPCLog {
     case ABORTED:
       System.out.println("I am back aborted!! LOL...");
       if (pendingReq != null) {
-        node.log(new Message(Constants.ABORT));
+        appendAndFlush(new Message(Constants.ABORT));
         pendingReq = null;
       }
       node.printPlayList();
@@ -170,7 +182,7 @@ public class TPCLog {
       System.out.println("I am back commited!! LOL...");
       if (pendingReq != null) {
         node.execute(pendingReq);
-        node.log(new Message(Constants.COMMIT));
+        appendAndFlush(new Message(Constants.COMMIT));
       }
       node.printPlayList();
     }

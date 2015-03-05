@@ -22,6 +22,8 @@ public class TPCSlave extends Thread {
   public TPCSlave(TPCNode node) {
     this.node = node;
     node.state = TPCNode.SlaveState.ABORTED;
+    // just to create an empty log
+    node.log(new Message(Constants.ABORT));
   }
   
   public TPCSlave(TPCNode node, boolean r) {
@@ -53,13 +55,17 @@ public class TPCSlave extends Thread {
   }
 
   public void rollback() {
-    logToScreen("Receive abort when voted yes... Sad...");
-    Message m = node.getPrevMessage();
+    logToScreen("Receive abort when voted yes... Sad... Rollback...");
+    Message m = node.log.getLastVoteReq();
+    m.print();
     if (m.getMessage().equals(Constants.ADD)) {
+      logToScreen("Redo add ...");
       node.delete(m.getSong(), m.getUrl());
     } else if (m.getMessage().equals(Constants.DEL)) {
+      logToScreen("Redo delete ...");
       node.add(m.getSong(), m.getUrl());
     } else if (m.getMessage().startsWith(Constants.EDIT)) {
+      logToScreen("Redo edit ...");
       int index = m.getMessage().indexOf('@');
       String oriUrl = m.getMessage().substring(index + 1);
       node.edit(m.getSong(), oriUrl);
