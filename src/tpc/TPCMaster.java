@@ -23,7 +23,7 @@ public class TPCMaster extends Thread implements KVStore {
   public TPCMaster(TPCNode node) {
     this.node = node;
   }
-  
+
   public TPCMaster(TPCNode node, boolean r) {
     this.node = node;
     recovery = r;
@@ -31,6 +31,7 @@ public class TPCMaster extends Thread implements KVStore {
 
   public void run() {
     new Listener().start();
+    new HeartBeater().start();
     
     if (recovery) {
       runTermination();
@@ -39,6 +40,10 @@ public class TPCMaster extends Thread implements KVStore {
     Scanner sc = new Scanner(System.in);
     while (true) {
       System.out.print("Enter the command, 1 for add, 2 for del, 3 for edit: ");
+      while (!sc.hasNextInt()) {
+        sc.next();
+        System.out.print("Enter the command, 1 for add, 2 for del, 3 for edit: ");  
+      }
       int command = sc.nextInt();
       if (command <= 0 || command > 3) {
         System.out.println("Wrong command code!!");
@@ -64,7 +69,7 @@ public class TPCMaster extends Thread implements KVStore {
     }
   }
 
-  
+
   @Override
   public boolean add(String song, String url) {
     logToScreen("Add " + song + "\t" +  url);
@@ -94,8 +99,8 @@ public class TPCMaster extends Thread implements KVStore {
     Message m = new  Message (Constants.VOTE_REQ, song, url, Constants.EDIT + "@" + oriUrl);
     return threePC(m);
   }
-  
-  
+
+
   public int getProcNum() {
     return node.getProcNum();
   }
@@ -111,22 +116,31 @@ public class TPCMaster extends Thread implements KVStore {
   public void unicast(int dst, Message m) {
     node.unicast(dst, m);
   }
-  
-  
+
+
   public void doPreCommit(TreeSet<Integer> list) {
     Message precommit = new Message(Constants.PRECOMMIT);
     node.log(precommit);
-    node.broadcast(precommit, list);
-    logToScreen("Broadcast: precommit");
+    int ppc = node.config.get("partialPreCommit");
+    if (ppc >= 0) {
+      logToScreen("Partial preCommit to " + ppc);
+      node.unicast(ppc, precommit);
+      logToScreen("Oh no, I am crashing...");
+      System.exit(-1);
+    } else {
+      node.broadcast(precommit, list);
+      logToScreen("Broadcast: precommit");
+    }
   }
 
   public void doCommit() {
     Message commit = new Message(Constants.COMMIT);
     node.log(commit);
     node.state = TPCNode.SlaveState.COMMITTED;
-    if (node.config.partialCommit >= 0) {
-      logToScreen("Partial commit to " + node.config.partialCommit);
-      node.unicast(node.config.partialCommit, commit);
+    int pc = node.config.get("partialCommit");
+    if (pc >= 0) {
+      logToScreen("Partial commit to " + pc);
+      node.unicast(pc, commit);
       logToScreen("Oh no, I am crashing...");
       System.exit(-1);
     } else {
@@ -179,7 +193,7 @@ public class TPCMaster extends Thread implements KVStore {
     logToScreen("Finish 3PC ");
     node.printPlayList();
   }
-  
+
 
   /*
    * wait for vote message from all participants
@@ -283,7 +297,7 @@ public class TPCMaster extends Thread implements KVStore {
     Message masterState = new Message(Constants.STATE_REP, "", "", node.state.name());
     masterState.setSrc(node.getProcNum());
     stateReports.add(masterState);
-    
+
     for (Message m : stateReports) {
       switch (m.getState()) {
       case ABORTED : 
@@ -307,16 +321,16 @@ public class TPCMaster extends Thread implements KVStore {
       logToScreen("!!!!!!!!!!!!!!!!!!!!!!!!!!! Unexpected state..");
       return TPCNode.SlaveState.ABORTED;
     }
-    
+
   }
-  
+
   public void startTermination() {
     logToScreen("Start Master's termination protocol");
     stateReports = new ArrayList<Message> ();
     uncertainList = new TreeSet<Integer>();
     ackList = new TreeSet<Integer> ();
   }
-  
+
   public void finishTermination() {
     logToScreen("Finish Master's termination protocol");
     stateReports = null;
@@ -325,9 +339,9 @@ public class TPCMaster extends Thread implements KVStore {
     node.printPlayList();
     //
   }
-  
-  
-  
+
+
+
   /*
    * The termmination protocol on page 252
    * 
@@ -346,10 +360,10 @@ public class TPCMaster extends Thread implements KVStore {
       doCommit();
       break;
     case COMMITTABLE :
-        doPreCommit(uncertainList);
-        // wait for ACK from all uncertain participants ...
-        collectAck(TIME_OUT, uncertainList.size());
-        doCommit();
+      doPreCommit(uncertainList);
+      // wait for ACK from all uncertain participants ...
+      collectAck(TIME_OUT, uncertainList.size());
+      doCommit();
       break;
     default:
       break;
@@ -387,6 +401,20 @@ public class TPCMaster extends Thread implements KVStore {
       }
     }
   }
+  
+  // inner Listener class
+  class HeartBeater extends Thread {
+    public void run() {
+      while (true) {
+          node.broadcast(new Message(Constants.HEART_BEAT));
+          try {
+            Thread.sleep(node.getDelayTime());
+          } catch (InterruptedException e) {
+            e.printStackTrace();
+          }
+        }
+      }
+    }
 
 
 }

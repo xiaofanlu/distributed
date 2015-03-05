@@ -61,6 +61,10 @@ public class Message implements Serializable {
     return msgType.equals(Constants.STATE_REPLY);
   }
   
+  public boolean isHeartBeat() {
+    return msgType.equals(Constants.HEART_BEAT);
+  }
+  
   
   public boolean isAck() {
     return msgType.equals(Constants.ACK);

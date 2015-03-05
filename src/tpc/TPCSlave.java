@@ -1,11 +1,13 @@
 package tpc;
 
 import java.util.Queue;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.concurrent.ConcurrentLinkedQueue;
-
 
 import util.Constants;
 import util.Message;
+
 
 
 public class TPCSlave extends Thread {
@@ -15,7 +17,8 @@ public class TPCSlave extends Thread {
   volatile boolean finished = false;
   boolean stateReq = false;
   boolean terminationResp = false;
-  
+  HeartBeatTimer hbt = new HeartBeatTimer();
+
   private boolean recovery;
 
 
@@ -25,7 +28,7 @@ public class TPCSlave extends Thread {
     // just to create an empty log
     node.log(new Message(Constants.ABORT));
   }
-  
+
   public TPCSlave(TPCNode node, boolean r) {
     this.node = node;
     recovery = r;
@@ -33,6 +36,8 @@ public class TPCSlave extends Thread {
 
   public void run() {
     new Listener().start();
+    hbt.start();
+    
     if (recovery) {
       runTermination();
     }
@@ -122,7 +127,7 @@ public class TPCSlave extends Thread {
     }
     node.printPlayList();
   }
-  
+
   public void doAbort() {
     rollback();
     if (!terminationResp || !node.log.getLastEntry().isAbort()) {
@@ -130,8 +135,8 @@ public class TPCSlave extends Thread {
     }
     node.printPlayList();
   }
-  
-  
+
+
   public void phase3 () {
     assert node.state == TPCNode.SlaveState.COMMITTABLE;
     node.unicast(node.getMaster(), new Message(Constants.ACK));
@@ -336,6 +341,8 @@ public class TPCSlave extends Thread {
           shutdown();
           node.runAsMaster();
         }
+      } else if (m.isHeartBeat()) {
+        hbt.reset();
       }
     }
 
@@ -353,6 +360,48 @@ public class TPCSlave extends Thread {
       }
       if (stateReq) {
         terminationResp = true;
+      }
+    }
+  }
+
+
+  public class HeartBeatTimer extends Thread{
+    public TimeoutTask task;
+    public Timer timer;
+
+
+    public HeartBeatTimer(){
+      timer = new Timer();
+      task = new TimeoutTask();
+    }
+
+    public void reset() {
+      task.SetTimeout(node.getDelayTime() * 9);
+    }
+
+    @Override
+    public void run(){
+      task.SetTimeout(node.getDelayTime() * 10);
+    }
+
+    public class TimeoutTask extends TimerTask{
+      public void SetTimeout(long delay){
+        task.cancel();
+        task = new TimeoutTask();
+        timer.schedule(task, delay);
+      }
+
+
+      /*
+       * (non-Javadoc)
+       * @see java.util.TimerTask#run()
+       * Failed to receive heart-beat within some time. 
+       * Election and termination. 
+       */
+      @Override
+      public void run(){
+        logToScreen(" >>> Heart Beat time out!!!");
+        exitAndRunElection();
       }
     }
   }

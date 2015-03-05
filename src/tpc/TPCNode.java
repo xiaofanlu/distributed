@@ -86,11 +86,11 @@ public class TPCNode implements KVStore {
   }
 
   public int getSleepTime() {
-    return (config.delay + 1) * 1000;
+    return (config.get("delay") + 1) * 1000;
   }
 
   public int getDelayTime() {
-    return config.delay * 1000;
+    return config.get("delay") * 1000;
   }
 
   public int getProcNum() {
@@ -256,23 +256,25 @@ public class TPCNode implements KVStore {
         messageQueue.offer(m);
         messageCount.put(m.getSrc(), messageCount.containsKey(m.getSrc()) ?
             messageCount.get(m.getSrc()) + 1 : 1);
-        if (config.deathAfterProcess == m.getSrc()) {
-          if (config.deathAfterCount <= messageCount.get(m.getSrc())) {
+        if (config.get("deathAfterProcess") == m.getSrc()) {
+          if (config.get("deathAfterCount") <= messageCount.get(m.getSrc())) {
             logToScreen("Death after count triggered!!");
             logToScreen("From Process: " + m.getSrc());
             logToScreen("Message Count: " + messageCount.get(m.getSrc()));
             System.exit(-1);
           }
         }
-        System.out.println(">>>>>>>>>>>> Message from " + m.getSrc() + ": " + m.getType() + "\t" + m.getMessage());
+        if (!m.isHeartBeat()) {
+          System.out.println(">>>>>>>>>>>> Message from " + m.getSrc() + ": " + m.getType() + "\t" + m.getMessage());
+        }
       }
     }
-   
+
     public void handleStateQuery(Message m) {
       switch (state) {
       case UNCERTAIN:
       case COMMITTABLE: 
-        logToScreen(": Still conducting tranction, unable to reply state query ...");
+        //logToScreen(": Still conducting tranction, unable to reply state query ...");
         break;
       case ABORTED:
       case COMMITTED:
@@ -281,7 +283,7 @@ public class TPCNode implements KVStore {
         unicast(m.getSrc(), stateReply);
       }
     }
-    
+
     public void handleStateReply(Message m) {
       switch (state) {
       case UNCERTAIN:
@@ -291,7 +293,7 @@ public class TPCNode implements KVStore {
         break;
       case ABORTED:
       case COMMITTED:
-        logToScreen(": Decided alreay, ingore further state reply ...");       
+        //logToScreen(": Decided alreay, ingore further state reply ...");       
         break;
       }
     }

@@ -11,6 +11,7 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.InetAddress;
+import java.util.HashMap;
 import java.util.Properties;
 import java.util.logging.Logger;
 
@@ -36,37 +37,40 @@ public class Config {
       addresses[i] = InetAddress.getByName(prop.getProperty("host" + i).trim());
       //System.out.printf("%d: %d @ %s\n", i, ports[i], addresses[i]);
     }
+
     if (prop.getProperty("ProcNum") != null) {
-      procNum = loadInt(prop, "ProcNum");
+      procNum = loadInt(prop,"ProcNum");
     } else {
       logger.info("procNum not loaded from file");
     }
-    if (prop.getProperty("partialCommit") != null) {
-      partialCommit = loadInt(prop, "partialCommit");
-    } else {
-      partialCommit = -1;
+
+    map = new HashMap<String, Integer> ();
+    // default value 
+    map.put("partialCommit", -1);
+    map.put("partialPreCommit", -1);
+    map.put("deathAfterProcess", -1);
+    map.put("deathAfterCount", Integer.MAX_VALUE);
+    map.put("delay", 1);
+
+    for (String pName : map.keySet()) {
+      if (prop.getProperty(pName) != null) {
+        map.put(pName, loadInt(prop, pName));
+      }
     }
-    if (prop.getProperty("deathAfterProcess") != null) {
-      deathAfterProcess = loadInt(prop, "deathAfterProcess");
-    } else {
-      deathAfterProcess = -1;
-    }
-    if (prop.getProperty("deathAfterCount") != null) {
-      deathAfterCount = loadInt(prop, "deathAfterCount");
-    } else {
-      deathAfterCount = Integer.MAX_VALUE;
-    }
-    if (prop.getProperty("delay") != null) {
-      delay = 5;//loadInt(prop, "delay");
-    } else {
-      delay = 1;
-    }
-    
+
   }
 
   private int loadInt(Properties prop, String s) {
     return Integer.parseInt(prop.getProperty(s.trim()));
   }
+  
+  public int get(String pName) {
+    if (map.containsKey(pName)) {
+      return map.get(pName);
+    }
+    return -1;
+  }
+
 
   /**
    * Default constructor for those who want to populate config file manually
@@ -100,28 +104,32 @@ public class Config {
    * Verbosity can be restricted by raising level to WARN
    */
   public Logger logger;
-  
-  
+
+
   /**
    * - partialCommit <n>
    * When the process becomes coordinator, she will only send the commit broadcast to process
    * n and then crash...
    * 
    */
-  public int partialCommit;
-  
+
+  /**
+   * - partialPreCommit <n>
+   * When the process becomes coordinator, she will only send the precommit broadcast to process
+   * n and then crash...
+   * 
+   */
+
   /**
    * - deathAfter <n> <p>
    * Process kills itself after received n messages from process p
    */
-  public int deathAfterProcess;
-  public int deathAfterCount;
-  
-  
+
+
   /*
    * -delay <n> 
    * Slow down the protocol to allow for human observation and intervention.
    */
-  public int delay;
-  
+  public HashMap<String, Integer> map;
+
 }
