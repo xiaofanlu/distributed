@@ -42,8 +42,8 @@ public class TPCMaster extends Thread implements KVStore {
     Scanner sc = new Scanner(System.in);
     while (true) {
       int command = getIntInput(sc, "Enter num for command (" + 
-          "1: add, 2: del, 3: edit, 4: playList, 5: log) : ");
-      if (command <= 0 || command > 5) {
+          "1: add, 2: del, 3: edit, 4: playList, 5: log, 6: upList) : ");
+      if (command <= 0 || command > 6) {
         System.out.println("Invalid command code!!");
         continue;
       }
@@ -71,10 +71,14 @@ public class TPCMaster extends Thread implements KVStore {
           node.unicastNow(id, new Message(Constants.PRINT, "", "", 
               Constants.PLAYLIST));
           //node.printPlayList();
-        } else {
+        } else if (command == 5){
           node.unicastNow(id, new Message(Constants.PRINT, "", "", 
               Constants.LOGLIST));
+        } else {
+          node.unicastNow(id, new Message(Constants.PRINT, "", "", 
+              Constants.UPLIST));
         }
+          
       }
     }
   }

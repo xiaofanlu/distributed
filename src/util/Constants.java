@@ -32,5 +32,5 @@ public class Constants {
   public static final String PRINT = "print";
   public static final String PLAYLIST = "playlist";
   public static final String LOGLIST = "loglist";
-
+  public static final String UPLIST = "uplist";
 }

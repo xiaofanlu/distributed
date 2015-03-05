@@ -7,18 +7,17 @@ import java.io.UnsupportedEncodingException;
 import java.util.Scanner;
 import java.util.TreeSet;
 
-import framework.Config;
+import tpc.TPCNode;
 
 public class UpList {
   public TreeSet<Integer> upList;
   public String path;
+  private TPCNode node;
 
-  public UpList () {
-    upList = new TreeSet<Integer> ();
-  }
 
-  public UpList(Config config) {
-    path = "TPCUpList" + config.procNum + ".txt";
+  public UpList(TPCNode node) {
+    this.node = node;
+    path = "TPCUpList" + node.config.procNum + ".txt";
     File f = new File(path);
     // log found, recover from log, otherwise, start new
     if(f.exists() && !f.isDirectory()) {
@@ -30,10 +29,10 @@ public class UpList {
         }
         sc.close();
       } catch (FileNotFoundException e) {
-        buildNewList(config.numProcesses);
+        buildNewList(node.config.numProcesses);
       }
     } else {
-      buildNewList(config.numProcesses);
+      buildNewList(node.config.numProcesses);
     }
   }
 
@@ -52,7 +51,7 @@ public class UpList {
       upList.add(Integer.parseInt(item));
     }
   }
-  
+
   public void logToFile() {
     try {
       PrintWriter writer = new PrintWriter(path, "UTF-8");
@@ -64,7 +63,7 @@ public class UpList {
       e.printStackTrace();
     }
   }
-  
+
   public void add(int i) {
     upList.add(i);
     logToFile();
@@ -108,5 +107,20 @@ public class UpList {
       sb.deleteCharAt(sb.length() - 1);
     }
     return sb.toString();
+  }
+
+  public void print() {
+    System.out.println();
+    System.out.println("++++++++++++++UpList++++++++++++");
+    for (int i : upList) {
+      if (i == node.getMaster()) {
+        System.out.print(i + "(M) ");
+      } else {
+        System.out.print(i + " ");
+      }
+    }
+    System.out.println();
+    System.out.println("+++++++++++++++ End  +++++++++++++");
+    System.out.println();
   }
 }

@@ -183,13 +183,13 @@ public class TPCSlave extends Thread {
    */
   public void getStateReq(int time_out) {
     expectStateReq = true;
-    for (int i = 0; i < time_out * 2; i++) {
+    for (int i = 0; i < time_out; i++) {
       if (stateReq) {
         return;
       }
       try {
         logToScreen("Waiting for stateReq " + i + " ...");
-        hbt.setTimeout((time_out * 2 + 1) * node.getSleepTime());
+        hbt.setTimeout((time_out + 1) * node.getSleepTime());
         Thread.sleep(node.getSleepTime());
       } catch (InterruptedException e) {
         e.printStackTrace();
@@ -334,6 +334,11 @@ public class TPCSlave extends Thread {
           stateReq = true;
           expectStateReq = false;
         }
+        if (node.getMaster() != m.getSrc()) {
+          logToScreen("StateReq not from current view num...");          
+          logToScreen("Update current master to >>> " + m.getSrc() + "<<<");
+          node.viewNum = m.getSrc();
+        }
         reportState(m.getSrc());
       } else if (m.isFeedback()) {
         processFeedback(m);
@@ -348,6 +353,10 @@ public class TPCSlave extends Thread {
       } else if (m.isHeartBeat()) {
         if (m.getSrc() != node.getMaster()) {
           logToScreen("Heart beat not from current view num...");
+          /* Xiaofan ToDo
+           * Comment out as there is unwanted update
+           */
+          
           logToScreen("Update current master to >>> " + m.getSrc() + "<<<");
           node.viewNum = m.getSrc();
         }

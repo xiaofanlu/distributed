@@ -178,7 +178,7 @@ public class TPCLog {
       System.out.println("Let's ask for help!");
       node.broadcast(new Message(Constants.STATE_QUERY));
       try {
-        Thread.sleep(node.getSleepTime());
+        Thread.sleep(node.getSleepTime() * 2);
       } catch (InterruptedException e) {
         e.printStackTrace();
       }

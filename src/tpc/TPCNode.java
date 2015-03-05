@@ -4,7 +4,6 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Scanner;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
@@ -17,7 +16,7 @@ import framework.Config;
 import framework.NetController;
 
 public class TPCNode implements KVStore {
-  Config config;
+  public Config config;
   NetController nc;
   TPCLog log;
   PlayList pl;
@@ -56,7 +55,7 @@ public class TPCNode implements KVStore {
     // the order of initialization matters!!
     state = SlaveState.ABORTED;
     nc = new NetController(config);
-    upList = new UpList(config);
+    upList = new UpList(this);
     initBroadcastList();
     viewNum = upList.getMaster();
     pl = new PlayList ();
@@ -289,12 +288,16 @@ public class TPCNode implements KVStore {
       } else if (m.isStateReply()) {
         handleStateReply(m);
       } else if (m.isJoinReq()) {
+        logToScreen("Node " + m.getSrc() + " is back! Welcome!");
         upList.add(m.getSrc()); 
+        upList.print();
       } else if (m.isPrintReq()) {
         if (m.getMessage().equals(Constants.PLAYLIST)) {
           printPlayList();
         } else if (m.getMessage().equals(Constants.LOGLIST)) {
           log.printLog();
+        }else if (m.getMessage().equals(Constants.UPLIST)) {
+          upList.print();
         }
       }
       else {
