@@ -363,7 +363,7 @@ public class TPCMaster extends Thread implements KVStore {
     ackList = new TreeSet<Integer> ();
     // wait for all thread to get ready
     try {
-      Thread.sleep(node.getSleepTime());
+      Thread.sleep(node.getSleepTime() * 2);
     } catch (InterruptedException e) {
       e.printStackTrace();
     }

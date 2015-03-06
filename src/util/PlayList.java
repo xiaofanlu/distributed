@@ -59,6 +59,7 @@ public class PlayList implements KVStore {
     int i = 1;
     for (Map.Entry<String, String> item : pl.entrySet()) {
       System.out.println(i + ". Song Name: " + item.getKey() + "\tURL: " + item.getValue());
+      i++;
     }
     System.out.println("+++++++++++++++ End  +++++++++++++");
     System.out.println();

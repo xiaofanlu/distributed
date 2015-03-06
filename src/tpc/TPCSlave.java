@@ -183,7 +183,7 @@ public class TPCSlave extends Thread {
    */
   public void getStateReq(int time_out) {
     expectStateReq = true;
-    for (int i = 0; i < time_out; i++) {
+    for (int i = 0; i < time_out * 2; i++) {
       if (stateReq) {
         return;
       }
@@ -259,7 +259,7 @@ public class TPCSlave extends Thread {
       getResponse(TIME_OUT);
     } else {
       // wait longer for the uncertain node to switch ...
-      getResponse(2 * TIME_OUT);
+      getResponse(TIME_OUT);
     }
     // response from master in the termination protocol
     if (!terminationResp) {
@@ -357,8 +357,8 @@ public class TPCSlave extends Thread {
            * Comment out as there is unwanted update
            */
           
-          logToScreen("Update current master to >>> " + m.getSrc() + "<<<");
-          node.viewNum = m.getSrc();
+          //logToScreen("Update current master to >>> " + m.getSrc() + "<<<");
+          //node.viewNum = m.getSrc();
         }
         hbt.reset();
       }
@@ -413,9 +413,13 @@ public class TPCSlave extends Thread {
     }
 
     public void setTimeout(long delay){
+      try {
       task.cancel();
       task = new TimeoutTask();
       timer.schedule(task, delay);
+      } catch (IllegalStateException e) {
+        e.printStackTrace();
+      }
     }
   }
 
