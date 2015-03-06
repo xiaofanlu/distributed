@@ -171,11 +171,17 @@ public class TPCLog {
   }
 
   public void lastStep() {
+    node.broadcast(new Message(Constants.STATE_QUERY));  
+    try {
+      Thread.sleep(node.getSleepTime() * 2);
+    } catch (InterruptedException e1) {
+      e1.printStackTrace();
+    }
     switch (node.state) {
     case UNCERTAIN:
     case COMMITTABLE: 
-      System.out.println("Unable to recover by itself ...");
-      System.out.println("Let's ask for help!");
+      node.logToScreen("Unable to recover by itself ...");
+      node.logToScreen("Let's ask for help!");
       node.broadcast(new Message(Constants.STATE_QUERY));
       try {
         Thread.sleep(node.getSleepTime() * 2);
@@ -185,7 +191,8 @@ public class TPCLog {
       lastStep();  // keep trying ...
       break;
     case ABORTED:
-      System.out.println("I am back aborted!! LOL...");
+      // just to update current master and uplist
+      node.logToScreen("I am back aborted!! LOL...");
       if (pendingReq != null) {
         if (!getLastEntry().isAbort()) {
           appendAndFlush(new Message(Constants.ABORT));
@@ -195,7 +202,8 @@ public class TPCLog {
       node.printPlayList();
       break;
     case COMMITTED:
-      System.out.println("I am back commited!! LOL...");
+      // to update current master and upList
+      node.logToScreen("I am back commited!! LOL...");
       if (pendingReq != null) {
         node.execute(pendingReq);
         if (!getLastEntry().isCommit()) {

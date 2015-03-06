@@ -329,17 +329,7 @@ public class TPCSlave extends Thread {
       if (m.isVoteReq()) { 
         tpcReq.offer(m);
       } else if (m.isStateReq()) {
-        //logToScreen("Got State Request");
-        if (expectStateReq) {
-          stateReq = true;
-          expectStateReq = false;
-        }
-        if (node.getMaster() != m.getSrc()) {
-          logToScreen("StateReq not from current view num...");          
-          logToScreen("Update current master to >>> " + m.getSrc() + "<<<");
-          node.viewNum = m.getSrc();
-        }
-        reportState(m.getSrc());
+        handleStateReq(m);
       } else if (m.isFeedback()) {
         processFeedback(m);
       } else if (m.isMaster()) {
@@ -380,6 +370,22 @@ public class TPCSlave extends Thread {
         terminationResp = true;
       }
     }
+    
+    public void handleStateReq(Message m) {
+      //logToScreen("Got State Request");
+      if (expectStateReq) {
+        stateReq = true;
+        expectStateReq = false;
+      }
+      if (node.getMaster() != m.getSrc()) {
+        logToScreen("StateReq not from current view num...");          
+        logToScreen("Update current master to >>> " + m.getSrc() + "<<<");
+        node.viewNum = m.getSrc();
+      }
+      // keep uplist updated with master
+      node.upList.updateFromString(m.getMessage());
+      reportState(m.getSrc());
+    }
   }
 
 
@@ -418,7 +424,7 @@ public class TPCSlave extends Thread {
       task = new TimeoutTask();
       timer.schedule(task, delay);
       } catch (IllegalStateException e) {
-        e.printStackTrace();
+        //e.printStackTrace();
       }
     }
   }

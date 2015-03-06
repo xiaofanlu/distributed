@@ -25,7 +25,7 @@ public class UpList {
       try {
         sc = new Scanner(f);
         if (sc.hasNextLine()) {
-          parseString(sc.nextLine());
+          updateFromString(sc.nextLine());
         }
         sc.close();
       } catch (FileNotFoundException e) {
@@ -43,7 +43,7 @@ public class UpList {
     }
   }
 
-  public void parseString(String list) {
+  public void updateFromString(String list) {
     upList = new TreeSet<Integer> ();
     String[] items = list.split("\\$");
     //System.out.println(Arrays.toString(items));

@@ -303,7 +303,7 @@ public class TPCMaster extends Thread implements KVStore {
 
 
   public void collectStateReport (int time_out) {
-    broadcast(new Message(Constants.STATE_REQ));
+    broadcast(new Message(Constants.STATE_REQ, "", "", node.upList.marshal()));
     
     for (int i = 0; i < time_out; i++) {
       if (stateReports.size() == node.size()) {

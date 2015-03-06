@@ -255,10 +255,10 @@ public class TPCNode implements KVStore {
           logToScreen("Invoke participant's algorithm of termination protocol...");
           //Message msg = new Message(Constants.UR_SELECTED);
           //unicast(temp_viewNum,msg);
-         // Message msg = new Message(Constants.UR_SELECTED);
+          // Message msg = new Message(Constants.UR_SELECTED);
           slaveThread = new TPCSlave(TPCNode.this, true);
           slaveThread.start();
-         // unicast(viewNum, msg);
+          // unicast(viewNum, msg);
         }
       }
     }
@@ -331,11 +331,14 @@ public class TPCNode implements KVStore {
         break;
       case ABORTED:
       case COMMITTED:
-        logToScreen("Reply to state query from " + 
-            m.getSrc() + ": " + state.name());
-        Message stateReply = 
-            new Message(Constants.STATE_REPLY, "", "", state.name());
-        unicast(m.getSrc(), stateReply);
+        if (getProcNum() == getMaster()) {
+          logToScreen("Reply to state query from " + 
+              m.getSrc() + ": " + state.name());
+          Message stateReply = 
+              new Message(Constants.STATE_REPLY, upList.marshal(), "", state.name());
+          stateReply.print();
+          unicast(m.getSrc(), stateReply);
+        }
       }
     }
 
@@ -345,11 +348,14 @@ public class TPCNode implements KVStore {
       case COMMITTABLE: 
         logToScreen("Thanks for your state reply! New state: " 
             + m.getMessage());
-        state = SlaveState.valueOf(m.getMessage());
-        break;
       case ABORTED:
       case COMMITTED:
-        //logToScreen(": Decided alreay, ingore further state reply ...");       
+        viewNum = m.getSrc();
+        state = SlaveState.valueOf(m.getMessage());
+        if (m.getSong().length() > 0) {
+          upList.updateFromString(m.getSong());
+        }
+        upList.print();      
         break;
       }
     }
