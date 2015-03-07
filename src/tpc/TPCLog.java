@@ -34,9 +34,11 @@ public class TPCLog {
     // log found, recover from log
     if(logFile.exists() && !logFile.isDirectory()) {
       recovery = true;
+      node.isRecovery = true;
       rebuildServer();
     } else {
       recovery = false;
+      node.isRecovery = false;
     }
   }
 
@@ -229,17 +231,55 @@ public class TPCLog {
    * check if we need to run group termination or not...
    */
   public boolean totalFailureRecover() {
+    System.out.println();
+    System.out.println();
+    node.logToScreen("Recover Group:");
+    System.out.print("\t");
+    for (int i : node.upList.recoverGroup) {
+      System.out.print(" #" + i + " ");
+    }
+    System.out.println();
+    
+    node.logToScreen("recoverGroup contains intersection ? " + 
+      node.upList.recoverGroup.containsAll(node.upList.intersection));
+    node.logToScreen("myLog equalss intersection ? " + 
+          node.upList.myLog.equals(node.upList.intersection));
+    System.out.println();
+    System.out.println();
+
     if (node.upList.recoverGroup.containsAll(node.upList.intersection) &&
         node.upList.myLog.equals(node.upList.intersection)) {
       // how to know termination group ?
-      
       // 1. viewnum set to smallest in myLog
+      node.viewNum = node.upList.myLog.first();
       // 2. upList set to myLog
-      // 3. if i am master, run master termination 
+      node.upList.upList = node.upList.myLog;
+      // 3. if i am master, run master termination
+      
+      /* 
+       * if there is a pending request
+       * we can't be lazy and must execute it right now. 
+       * thus, we can either commit or abort in the recovered state
+       */
+      node.hasRecovered = true;
+      if (pendingReq != null) {
+        node.execute(pendingReq);
+      }
+      
+      if (node.getProcNum() == node.getMaster()) {
+        node.masterThread = new TPCMaster(node, true);
+        node.masterThread.start();
+      } else {
+        //Message msg = new Message(Constants.UR_SELECTED);
+        node.slaveThread = new TPCSlave(node, true, true);
+        node.slaveThread.start();
+        //node.unicast(node.viewNum, msg);
+      }
+
+      return true;
       //    else run slave termination waiting state request
     }
-    
-    return true;
+    return false;
   }
 
 }

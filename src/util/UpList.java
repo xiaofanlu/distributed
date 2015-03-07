@@ -24,9 +24,8 @@ public class UpList {
     this.node = node;
     path = "TPCUpList" + node.config.procNum + ".txt";
     uLog = new HashMap<Integer, TreeSet<Integer>> ();
-    intersection = new TreeSet<Integer> ();
-    myLog = new TreeSet<Integer> ();
-    recoverGroup = new TreeSet<Integer> ();
+    //intersection = new TreeSet<Integer> ();
+
     
     File f = new File(path);
     // log found, recover from log, otherwise, start new
@@ -36,6 +35,9 @@ public class UpList {
         sc = new Scanner(f);
         if (sc.hasNextLine()) {
           myLog = parseString(sc.nextLine());
+          intersection = new TreeSet<Integer> (myLog);
+          recoverGroup = new TreeSet<Integer> ();
+          recoverGroup.add(node.getProcNum());
         }
         sc.close();
       } catch (FileNotFoundException e) {
@@ -45,6 +47,7 @@ public class UpList {
       upList.add(node.getProcNum());
     } else {
       buildNewList(node.config.numProcesses);
+      logToFile();
     }
   }
 
@@ -126,7 +129,7 @@ public class UpList {
     for (int i : set) {
       sb.append(i + "$");
     }
-    if (upList.size() > 0) {
+    if (set.size() > 0) {
       sb.deleteCharAt(sb.length() - 1);
     }
     return sb.toString();

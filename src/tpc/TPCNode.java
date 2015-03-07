@@ -20,8 +20,10 @@ public class TPCNode implements KVStore {
   NetController nc;
   TPCLog log;
   PlayList pl;
-  private TPCMaster masterThread;
-  private TPCSlave slaveThread;
+  TPCMaster masterThread;
+  TPCSlave slaveThread;
+  boolean isRecovery;
+  boolean hasRecovered = false;
 
   int viewNum; // Current Master ID
   public TreeSet<Integer> broadcastList;
@@ -76,7 +78,10 @@ public class TPCNode implements KVStore {
 
 
   public void start () {
-    if (getProcNum() == 0 && !log.recovery) {
+    if (hasRecovered) {
+      return;
+    }
+    if (getProcNum() == 0 && !isRecovery) {
       System.out.println(">>>> Run as Master");
       masterThread = new TPCMaster(this);
       masterThread.start();
@@ -291,6 +296,8 @@ public class TPCNode implements KVStore {
     public void processMessage(String str) {
       Message m = new Message ();
       m.unmarshal(str);
+
+
       if (m.isStateQuery()) {
         handleStateQuery(m);
       } else if (m.isStateReply()) {
@@ -343,18 +350,26 @@ public class TPCNode implements KVStore {
             m.getSrc() + ": " + state.name());
         Message stateReply = 
             new Message(Constants.STATE_REPLY, upList.marshal(), "", state.name());
-        stateReply.print();
+        //stateReply.print();
+        if (!upList.upList.contains(m.getSrc())) {
+          upList.add(m.getSrc());
+        }
         unicast(m.getSrc(), stateReply);
       }
-      if (log.recovery) {
+      if (isRecovery) {
         if (!upList.uLog.containsKey(m.getSrc())) {
+          logToScreen("Get StateReq from node " + m.getSrc());
           TreeSet<Integer> otherLog = upList.parseString(m.getMessage());
           upList.uLog.put(m.getSrc(), otherLog);
+          logToScreen("Node " + m.getSrc() + " logged upList: " + 
+              upList.serialize(otherLog));
           upList.intersection.retainAll(otherLog);
+          logToScreen("current intersetion: " + 
+              upList.serialize(upList.intersection));
           upList.recoverGroup.add(m.getSrc());
         }
       }
-      
+
     }
 
     public void handleStateReply(Message m) {
@@ -365,13 +380,14 @@ public class TPCNode implements KVStore {
             + m.getMessage());
       case ABORTED:
       case COMMITTED:
-        viewNum = m.getSrc();
+        //viewNum = m.getSrc();
         state = SlaveState.valueOf(m.getMessage());
+        // update upList from others
         if (m.getSong().length() > 0) {
           upList.updateFromString(m.getSong());
         }
         upList.add(getProcNum());
-        upList.print();      
+        //upList.print();      
         break;
       }
     }

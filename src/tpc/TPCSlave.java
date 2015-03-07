@@ -237,6 +237,9 @@ public class TPCSlave extends Thread {
 
   public boolean executeRequest(Message m) {
     assert node.state == TPCNode.SlaveState.ABORTED;
+    if (m.getSrc() != node.getMaster()) {
+      logToScreen("Update master to node :" + m.getSrc());
+    }
     boolean success = false;
     node.log(m);  // log the vote_req 
     if (m.getMessage().equals(Constants.ADD)) {
@@ -247,11 +250,13 @@ public class TPCSlave extends Thread {
       success = node.edit(m.getSong(), m.getUrl());
     }
     logToScreen("Get Request: " + m.getMessage() + "\t" + success);
-    Message reply = new Message(Constants.RESP, "", "", success? Constants.YES : Constants.NO);
+    Message reply = new Message(Constants.RESP, "", "", success? 
+        Constants.YES : Constants.NO);
     node.log(reply); // log reply
     node.unicast(m.getSrc(), reply);
     logToScreen("Voted: " + reply.getMessage());
-    node.state = success ? TPCNode.SlaveState.UNCERTAIN : TPCNode.SlaveState.ABORTED;
+    node.state = success ? 
+        TPCNode.SlaveState.UNCERTAIN : TPCNode.SlaveState.ABORTED;
     return success;
   }
 
@@ -350,6 +355,9 @@ public class TPCSlave extends Thread {
     }
 
     public void processMessage(Message m) {
+      if (m == null) {
+        return;
+      }
       if (m.isVoteReq()) { 
         tpcReq.offer(m);
       } else if (m.isStateReq()) {

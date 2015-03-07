@@ -431,6 +431,9 @@ public class TPCMaster extends Thread implements KVStore {
     }
 
     public void processMessage(Message m) {
+      if (m == null) {
+        return;
+      }
       if (m.isResponse()) {
         if (m.getMessage().equals(Constants.YES) && yesList != null) {
           yesList.add(m.getSrc());
