@@ -239,6 +239,7 @@ public class TPCSlave extends Thread {
     assert node.state == TPCNode.SlaveState.ABORTED;
     if (m.getSrc() != node.getMaster()) {
       logToScreen("Update master to node :" + m.getSrc());
+      node.viewNum = m.getSrc();
     }
     boolean success = false;
     node.log(m);  // log the vote_req 
