@@ -37,7 +37,11 @@ public class UpList {
           myLog = parseString(sc.nextLine());
           intersection = new TreeSet<Integer> (myLog);
           recoverGroup = new TreeSet<Integer> ();
-          recoverGroup.add(node.getProcNum());
+          /* 
+           * add myself to recoverGroup after broadcast my info
+           * to get everyone in the same pace.  
+           */
+          //recoverGroup.add(node.getProcNum());
         }
         sc.close();
       } catch (FileNotFoundException e) {

@@ -41,56 +41,71 @@ public class TPCMaster extends Thread implements KVStore {
     }
     Scanner sc = new Scanner(System.in);
     while (true) {
-      int command = getIntInput(sc, "Enter num for command (" + 
-          "1: add, 2: del, 3: edit, 4: playList, 5: log, 6: upList) : ");
-      if (command <= 0 || command > 6) {
-        System.out.println("Invalid command code!!");
-        continue;
-      }
-      if (command <= 3 ) {
-        System.out.print("Enter song name: ");
-        String song = sc.nextLine();
-        System.out.print("Enter song url: ");
-        String url = sc.nextLine();
-        switch(command) {
-        case 1:  add(song, url);
-        break;
-        case 2:  delete(song, url);
-        break;
-        case 3:  edit(song, url);
-        break;
-        }
-        try {
-          Thread.sleep(500);
-        } catch (InterruptedException e) {
-          e.printStackTrace();
-        }
-      } else {
-        int id = getIntInput(sc, "Enter the node id: ");
-        if (command == 4) {
-          node.unicastNow(id, new Message(Constants.PRINT, "", "", 
-              Constants.PLAYLIST));
-          //node.printPlayList();
-        } else if (command == 5){
-          node.unicastNow(id, new Message(Constants.PRINT, "", "", 
-              Constants.LOGLIST));
-        } else {
-          node.unicastNow(id, new Message(Constants.PRINT, "", "", 
-              Constants.UPLIST));
-        }
+      getCommandFromUser(sc);
+    }
+  }
 
+  public void getCommandFromUser(Scanner sc) {
+
+    int command = getIntInput(sc, "Enter num for command (" + 
+        "1: add, 2: del, 3: edit, 4: playList, 5: log, 6: upList) : ");
+    if (command <= 0 || command > 6) {
+      if (command != 99) {
+        System.out.println("Invalid command code!!");
+        return;
+      }
+    }
+    if (command <= 3 ) {
+      System.out.print("Enter song name: ");
+      String song = sc.nextLine();
+      System.out.print("Enter song url: ");
+      String url = sc.nextLine();
+      switch(command) {
+      case 1:  add(song, url);
+      break;
+      case 2:  delete(song, url);
+      break;
+      case 3:  edit(song, url);
+      break;
+      }
+      try {
+        Thread.sleep(500);
+      } catch (InterruptedException e) {
+        e.printStackTrace();
+      }
+    } else if (command <= 5) {
+      int id = getIntInput(sc, "Enter the node id: ");
+      if (command == 4) {
+        node.unicastNow(id, new Message(Constants.PRINT, "", "", 
+            Constants.PLAYLIST));
+        //node.printPlayList();
+      } else if (command == 5){
+        node.unicastNow(id, new Message(Constants.PRINT, "", "", 
+            Constants.LOGLIST));
+      } else {
+        node.unicastNow(id, new Message(Constants.PRINT, "", "", 
+            Constants.UPLIST));
+      }
+    } else if (command == 99) {
+      logToScreen("Hidden command <Kill All>");
+      int id = getIntInput(sc, "Enter the node id (-1 for all): ");
+      if (id == -1) {
+        node.broadcast(new Message(Constants.KILL));
+      } else {
+        node.unicastNow(id, new Message(Constants.KILL));
       }
     }
   }
 
+
   public int getIntInput(Scanner sc, String prop) {
     System.out.print(prop);
     while (!sc.hasNextInt()) {
-      sc.nextLine();
+        sc.nextLine();
       System.out.print(prop);  
     }
     int num = sc.nextInt();
-    sc.nextLine();
+      sc.nextLine();
     return num;
   }
 

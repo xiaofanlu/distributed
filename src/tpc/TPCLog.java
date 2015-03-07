@@ -172,20 +172,13 @@ public class TPCLog {
     }
     System.out.println("Rebuild server finished!!");
 
-    while(!lastStep()) {
-      ;
+    new QueryState().start();
+    while(recovery) {
+      recovery = !lastStep();
     }
-    recovery = false;
   }
 
   public boolean lastStep() {
-    node.broadcast(new Message(Constants.STATE_QUERY, "", "", 
-        node.upList.getMyLogUpList()));  
-    try {
-      Thread.sleep(node.getSleepTime());
-    } catch (InterruptedException e1) {
-      e1.printStackTrace();
-    }
     switch (node.state) {
     case UNCERTAIN:
     case COMMITTABLE: 
@@ -193,7 +186,7 @@ public class TPCLog {
       node.logToScreen("Let's ask for help!");
       //node.broadcast(new Message(Constants.STATE_QUERY));
       try {
-        Thread.sleep(node.getSleepTime() * 2);
+        Thread.sleep(node.getSleepTime() * 5);
       } catch (InterruptedException e) {
         e.printStackTrace();
       }
@@ -226,7 +219,7 @@ public class TPCLog {
     // node.broadcast(new Message(Constants.JOIN_REQ));
   }
 
-  
+
   /*
    * check if we need to run group termination or not...
    */
@@ -239,11 +232,11 @@ public class TPCLog {
       System.out.print(" #" + i + " ");
     }
     System.out.println();
-    
+
     node.logToScreen("recoverGroup contains intersection ? " + 
-      node.upList.recoverGroup.containsAll(node.upList.intersection));
+        node.upList.recoverGroup.containsAll(node.upList.intersection));
     node.logToScreen("myLog equalss intersection ? " + 
-          node.upList.myLog.equals(node.upList.intersection));
+        node.upList.myLog.equals(node.upList.intersection));
     System.out.println();
     System.out.println();
 
@@ -255,7 +248,7 @@ public class TPCLog {
       // 2. upList set to myLog
       node.upList.upList = node.upList.myLog;
       // 3. if i am master, run master termination
-      
+
       /* 
        * if there is a pending request
        * we can't be lazy and must execute it right now. 
@@ -265,7 +258,12 @@ public class TPCLog {
       if (pendingReq != null) {
         node.execute(pendingReq);
       }
-      
+
+      try {
+        Thread.sleep(node.getSleepTime() * 3);
+      } catch (InterruptedException e) {
+        e.printStackTrace();
+      }
       if (node.getProcNum() == node.getMaster()) {
         node.masterThread = new TPCMaster(node, true);
         node.masterThread.start();
@@ -280,6 +278,32 @@ public class TPCLog {
       //    else run slave termination waiting state request
     }
     return false;
+  }
+
+  public class QueryState extends Thread {
+    public void run() {
+      /* 
+       * Listen before broadcast!
+       */
+      try {
+        Thread.sleep(node.getSleepTime() * 3);
+      } catch (InterruptedException e1) {
+        e1.printStackTrace();
+      }
+      /*
+       * add my self to recoverGroup
+       */
+      node.upList.recoverGroup.add(node.getProcNum());
+      while (recovery) {
+        node.broadcast(new Message(Constants.STATE_QUERY, "", "", 
+            node.upList.getMyLogUpList()));  
+        try {
+          Thread.sleep(node.getSleepTime());
+        } catch (InterruptedException e1) {
+          e1.printStackTrace();
+        }
+      }
+    }
   }
 
 }

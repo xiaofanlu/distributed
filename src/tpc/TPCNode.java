@@ -314,6 +314,9 @@ public class TPCNode implements KVStore {
         }else if (m.getMessage().equals(Constants.UPLIST)) {
           upList.print();
         }
+      } else if (m.isKill()) {
+        logToScreen("Suicide command received! :(");
+        System.exit(-1);
       }
       else {
         messageQueue.offer(m);

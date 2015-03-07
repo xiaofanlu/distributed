@@ -97,6 +97,11 @@ public class Message implements Serializable {
     return msgType.equals(Constants.UR_SELECTED);
   }
   
+  public boolean isKill() {
+    return msgType.equals(Constants.KILL);
+  }
+  
+  
   public boolean votedNo() {
     return msgType.equals(Constants.RESP) && message.equals(Constants.NO);
   }
