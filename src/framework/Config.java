@@ -52,18 +52,25 @@ public class Config {
     map.put("deathAfterCount", Integer.MAX_VALUE);
     map.put("delay", 1);
 
+    System.out.println();
+    System.out.println(" >>>>>>>>>>>>>>> TEST SETTING <<<<<<<<<<<<<<<< ");
     for (String pName : map.keySet()) {
       if (prop.getProperty(pName) != null) {
         map.put(pName, loadInt(prop, pName));
+        if (map.get(pName) != -1) {
+          System.out.println("\t" + pName.toUpperCase() + "\t: " 
+              + map.get(pName));
+        }
       }
     }
-
+    System.out.println(" >>>>>>>>>>>>>>>>    END     <<<<<<<<<<<<<<<<< ");
+    System.out.println("\n");
   }
 
   private int loadInt(Properties prop, String s) {
     return Integer.parseInt(prop.getProperty(s.trim()));
   }
-  
+
   public int get(String pName) {
     if (map.containsKey(pName)) {
       return map.get(pName);

@@ -225,43 +225,51 @@ public class TPCNode implements KVStore {
   }
 
 
-  public class Election extends Thread {
-    public void run() {
-      logToScreen(": Running election protocol...");
-      Integer temp_viewNum = viewNum;
-      if(upList.size() == 1 & viewNum == config.procNum){
-        // Node is the only node in the network, If the node itself is always in UpList,
-        // then this means node i is already the Master and no other master is available
-        logToScreen(": Single Master Left...");
-      } else{
-        temp_viewNum = (viewNum + 1) % config.numProcesses; // Update viewNum
+  public void runElection() {
+    logToScreen(": Running election protocol...");
+    Integer temp_viewNum = viewNum;
+    if(upList.size() == 1 & viewNum == config.procNum){
+      // Node is the only node in the network, If the node itself is always in UpList,
+      // then this means node i is already the Master and no other master is available
+      logToScreen(": Single Master Left...");
+    } else{
+      temp_viewNum = (viewNum + 1) % config.numProcesses; // Update viewNum
+    }
+    //logToScreen("view_num: " + viewNum + "\t temp_viewNum:" + temp_viewNum);
+    //temp_viewNum =  upList.upList.ceiling(temp_viewNum);
+    // The least element in the UP set that is no smaller than viewNum
+    if(temp_viewNum == null){
+      logToScreen("Error: Can't find new Master");
+    } else {
+      upList.remove(viewNum);
+      viewNum = temp_viewNum;
+      if(temp_viewNum == config.procNum){
+        logToScreen("Elected >>> Self <<<  as Master...");
+        logToScreen("Invoke coordinator's algorithm of termination protocol...");
+        masterThread = new TPCMaster(TPCNode.this, true);
+        masterThread.start();
       }
-      //logToScreen("view_num: " + viewNum + "\t temp_viewNum:" + temp_viewNum);
-      //temp_viewNum =  upList.upList.ceiling(temp_viewNum);
-      // The least element in the UP set that is no smaller than viewNum
-      if(temp_viewNum == null){
-        logToScreen("Error: Can't find new Master");
-      } else {
-        upList.remove(viewNum);
-        viewNum = temp_viewNum;
-        if(temp_viewNum == config.procNum){
-          logToScreen("Elected >>> Self <<<  as Master...");
-          logToScreen("Invoke coordinator's algorithm of termination protocol...");
-          masterThread = new TPCMaster(TPCNode.this, true);
-          masterThread.start();
-        }
-        else{
-          logToScreen("Elected >>> " + viewNum +" <<< as Master ...");
-          logToScreen("Invoke participant's algorithm of termination protocol...");
-          //Message msg = new Message(Constants.UR_SELECTED);
-          //unicast(temp_viewNum,msg);
-          // Message msg = new Message(Constants.UR_SELECTED);
-          slaveThread = new TPCSlave(TPCNode.this, true);
-          slaveThread.start();
-          // unicast(viewNum, msg);
-        }
+      else{
+        logToScreen("Elected >>> " + viewNum +" <<< as Master ...");
+        logToScreen("Invoke participant's algorithm of termination protocol...");
+        //Message msg = new Message(Constants.UR_SELECTED);
+        //unicast(temp_viewNum,msg);
+        Message msg = new Message(Constants.UR_SELECTED);
+        slaveThread = new TPCSlave(TPCNode.this, true, true);
+        slaveThread.start();
+        unicast(viewNum, msg);
       }
     }
+  }
+
+
+  /*
+   * get stateReq from new master, skip waiting for stateReq
+   * run termination immediately
+   */
+  public void runSlaveTermination () {
+    slaveThread = new TPCSlave(TPCNode.this, true, false);
+    slaveThread.start();
   }
 
   // inner Listener class
@@ -331,15 +339,22 @@ public class TPCNode implements KVStore {
         break;
       case ABORTED:
       case COMMITTED:
-        if (getProcNum() == getMaster()) {
-          logToScreen("Reply to state query from " + 
-              m.getSrc() + ": " + state.name());
-          Message stateReply = 
-              new Message(Constants.STATE_REPLY, upList.marshal(), "", state.name());
-          stateReply.print();
-          unicast(m.getSrc(), stateReply);
+        logToScreen("Reply to state query from " + 
+            m.getSrc() + ": " + state.name());
+        Message stateReply = 
+            new Message(Constants.STATE_REPLY, upList.marshal(), "", state.name());
+        stateReply.print();
+        unicast(m.getSrc(), stateReply);
+      }
+      if (log.recovery) {
+        if (!upList.uLog.containsKey(m.getSrc())) {
+          TreeSet<Integer> otherLog = upList.parseString(m.getMessage());
+          upList.uLog.put(m.getSrc(), otherLog);
+          upList.intersection.retainAll(otherLog);
+          upList.recoverGroup.add(m.getSrc());
         }
       }
+      
     }
 
     public void handleStateReply(Message m) {
@@ -355,6 +370,7 @@ public class TPCNode implements KVStore {
         if (m.getSong().length() > 0) {
           upList.updateFromString(m.getSong());
         }
+        upList.add(getProcNum());
         upList.print();      
         break;
       }

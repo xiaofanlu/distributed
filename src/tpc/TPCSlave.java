@@ -20,7 +20,8 @@ public class TPCSlave extends Thread {
   boolean terminationResp = false;
   HeartBeatTimer hbt = new HeartBeatTimer();
 
-  private boolean recovery;
+  private boolean isTermination = false;
+  private boolean waitStateReq = false;
 
 
   public TPCSlave(TPCNode node) {
@@ -30,16 +31,17 @@ public class TPCSlave extends Thread {
     node.log(new Message(Constants.ABORT));
   }
 
-  public TPCSlave(TPCNode node, boolean r) {
+  public TPCSlave(TPCNode node, boolean t, boolean s) {
     this.node = node;
-    recovery = r;
+    isTermination = t;
+    waitStateReq = s;
   }
 
   public void run() {
     new Listener().start();
     hbt.start();
 
-    if (recovery) {
+    if (isTermination) {
       runTermination();
     }
 
@@ -71,7 +73,15 @@ public class TPCSlave extends Thread {
   public void exitAndRunElection() {
     shutdown();
     logToScreen("Shutting down current slave thread...");
-    node.new Election().start();
+    //node.new Election().start();
+    node.runElection();
+  }
+
+  public void exitAndTermination() {
+    shutdown();
+    logToScreen("Shutting down current slave thread...");
+    node.runSlaveTermination();
+    //node.new Election().start();
   }
 
   public void logToScreen(String m) {
@@ -87,6 +97,9 @@ public class TPCSlave extends Thread {
     node.state = TPCNode.SlaveState.ABORTED;
     if (executeRequest(m)) {
       getFeedback(TIME_OUT);
+      if (finished) {
+        return;
+      }
       switch (node.state) {
       case UNCERTAIN:
         //TODO: should be a new thread to do that 
@@ -126,6 +139,9 @@ public class TPCSlave extends Thread {
     node.unicast(node.getMaster(), new Message(Constants.ACK));
     logToScreen("Reply ACK");
     getCommit(TIME_OUT);
+    if (finished) {
+      return;
+    }
     switch (node.state) {
     case COMMITTABLE:
       exitAndRunElection();
@@ -145,7 +161,7 @@ public class TPCSlave extends Thread {
    */
   public void getCommit(int time_out) {
     for (int i = 0; i < time_out; i++) {
-      if (node.state != TPCNode.SlaveState.COMMITTABLE) {
+      if (node.state != TPCNode.SlaveState.COMMITTABLE || finished) {
         return;
       }
       try {
@@ -164,7 +180,7 @@ public class TPCSlave extends Thread {
    */
   public void getFeedback(int time_out) {
     for (int i = 0; i < time_out; i++) {
-      if (node.state != TPCNode.SlaveState.UNCERTAIN) {
+      if (node.state != TPCNode.SlaveState.UNCERTAIN || finished) {
         return;
       }
       try {
@@ -184,7 +200,7 @@ public class TPCSlave extends Thread {
   public void getStateReq(int time_out) {
     expectStateReq = true;
     for (int i = 0; i < time_out * 2; i++) {
-      if (stateReq) {
+      if (stateReq || finished) {
         return;
       }
       try {
@@ -246,22 +262,30 @@ public class TPCSlave extends Thread {
    */
   public void runTermination() {
     logToScreen("Start Slave's termination protocol");
-    getStateReq(TIME_OUT);
-    // timeout, no state request from master
-    // run election again...
-    if (!stateReq) {  
-      exitAndRunElection();
-      return;
+    if (waitStateReq) {
+      getStateReq(TIME_OUT);
+      // timeout, no state request from master
+      // run election again...
+      if (finished) {
+        return;
+      }
+      if (!stateReq) {  
+        exitAndRunElection();
+        return;
+      }
     }
     //reportState(node.getMaster());
     TPCNode.SlaveState pState = node.state;
     if (node.state == TPCNode.SlaveState.UNCERTAIN) {
       getResponse(TIME_OUT);
-    } else {
+    } else if (node.state == TPCNode.SlaveState.COMMITTABLE) {
       // wait longer for the uncertain node to switch ...
-      getResponse(TIME_OUT);
+      getResponse(TIME_OUT * 2);
     }
     // response from master in the termination protocol
+    if (finished) {
+      return;
+    }
     if (!terminationResp) {
       exitAndRunElection();
       return;
@@ -334,19 +358,17 @@ public class TPCSlave extends Thread {
         processFeedback(m);
       } else if (m.isMaster()) {
         // TODO: update...
-        /*
         if (!finished) {
           shutdown();
           node.runAsMaster();
         }
-         */
       } else if (m.isHeartBeat()) {
         if (m.getSrc() != node.getMaster()) {
-          logToScreen("Heart beat not from current view num...");
+          //logToScreen("Heart beat not from current view num...");
           /* Xiaofan ToDo
            * Comment out as there is unwanted update
            */
-          
+
           //logToScreen("Update current master to >>> " + m.getSrc() + "<<<");
           //node.viewNum = m.getSrc();
         }
@@ -356,35 +378,55 @@ public class TPCSlave extends Thread {
 
     public void processFeedback(Message m) {
       //System.out.println("Get Reply: " + m.getType());
+      TPCNode.SlaveState prevState = node.state;
       if (m.getType().equals(Constants.COMMIT)) {
-        assert node.state == TPCNode.SlaveState.COMMITTABLE;
+        // assert node.state == TPCNode.SlaveState.COMMITTABLE;
         node.state = TPCNode.SlaveState.COMMITTED;
+        if (node.state != prevState) {
+          node.log(m);
+        }
       } else if (m.getType().equals(Constants.ABORT)) {
         node.state = TPCNode.SlaveState.ABORTED;
       } else if (m.getType().equals(Constants.PRECOMMIT)) {
         assert node.state == TPCNode.SlaveState.UNCERTAIN;
         node.state = TPCNode.SlaveState.COMMITTABLE;
         node.log(m);  // log precommit
-      }
+      } 
       if (stateReq) {
         terminationResp = true;
       }
     }
-    
+
     public void handleStateReq(Message m) {
       //logToScreen("Got State Request");
+      if (node.getMaster() <= m.getSrc()) {
+        reportState(m.getSrc());
+      }
       if (expectStateReq) {
         stateReq = true;
         expectStateReq = false;
+      } else {
+        updateInfo(m);
+        switch(node.state) {
+        case COMMITTABLE:
+        case UNCERTAIN:
+          exitAndTermination();
+          break;
+        case ABORTED:
+        case COMMITTED:
+          break;          
+        }
       }
-      if (node.getMaster() != m.getSrc()) {
+    }
+
+    public void updateInfo(Message m) {
+      if (node.getMaster() < m.getSrc()) {
         logToScreen("StateReq not from current view num...");          
         logToScreen("Update current master to >>> " + m.getSrc() + "<<<");
         node.viewNum = m.getSrc();
       }
       // keep uplist updated with master
       node.upList.updateFromString(m.getMessage());
-      reportState(m.getSrc());
     }
   }
 
@@ -420,9 +462,9 @@ public class TPCSlave extends Thread {
 
     public void setTimeout(long delay){
       try {
-      task.cancel();
-      task = new TimeoutTask();
-      timer.schedule(task, delay);
+        task.cancel();
+        task = new TimeoutTask();
+        timer.schedule(task, delay);
       } catch (IllegalStateException e) {
         //e.printStackTrace();
       }

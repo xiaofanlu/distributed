@@ -4,20 +4,30 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
+import java.util.HashMap;
 import java.util.Scanner;
 import java.util.TreeSet;
 
 import tpc.TPCNode;
 
 public class UpList {
-  public TreeSet<Integer> upList;
+  public TreeSet<Integer> upList; // current view of alive nodes
   public String path;
   private TPCNode node;
 
+  public HashMap<Integer, TreeSet<Integer>> uLog;
+  public TreeSet<Integer> intersection;
+  public TreeSet<Integer> myLog;  // logged uplist, not current view
+  public TreeSet<Integer> recoverGroup;  // node that has statequery
 
   public UpList(TPCNode node) {
     this.node = node;
     path = "TPCUpList" + node.config.procNum + ".txt";
+    uLog = new HashMap<Integer, TreeSet<Integer>> ();
+    intersection = new TreeSet<Integer> ();
+    myLog = new TreeSet<Integer> ();
+    recoverGroup = new TreeSet<Integer> ();
+    
     File f = new File(path);
     // log found, recover from log, otherwise, start new
     if(f.exists() && !f.isDirectory()) {
@@ -25,12 +35,14 @@ public class UpList {
       try {
         sc = new Scanner(f);
         if (sc.hasNextLine()) {
-          updateFromString(sc.nextLine());
+          myLog = parseString(sc.nextLine());
         }
         sc.close();
       } catch (FileNotFoundException e) {
         buildNewList(node.config.numProcesses);
       }
+      upList = new TreeSet<Integer> ();
+      upList.add(node.getProcNum());
     } else {
       buildNewList(node.config.numProcesses);
     }
@@ -43,13 +55,18 @@ public class UpList {
     }
   }
 
-  public void updateFromString(String list) {
-    upList = new TreeSet<Integer> ();
+  public TreeSet<Integer> parseString(String list) {
+    TreeSet<Integer> rst = new TreeSet<Integer> ();
     String[] items = list.split("\\$");
-    //System.out.println(Arrays.toString(items));
     for (String item : items) {
-      upList.add(Integer.parseInt(item));
+      rst.add(Integer.parseInt(item));
     }
+    return rst;
+  }
+
+
+  public void updateFromString(String list) {
+    upList = parseString(list);
   }
 
   public void logToFile() {
@@ -89,6 +106,12 @@ public class UpList {
     logToFile();
   }
 
+  public TreeSet<Integer> getBroadcastList() {
+    TreeSet<Integer> rst = new TreeSet<Integer> (upList);
+    rst.remove(node.getProcNum());
+    return rst;
+  }
+
 
   public int getMaster () {
     int master = Integer.MAX_VALUE;
@@ -98,15 +121,23 @@ public class UpList {
     return master;
   }
 
-  public String marshal () {
+  public String serialize (TreeSet<Integer> set) {
     StringBuilder sb = new StringBuilder();
-    for (int i : upList) {
+    for (int i : set) {
       sb.append(i + "$");
     }
     if (upList.size() > 0) {
       sb.deleteCharAt(sb.length() - 1);
     }
     return sb.toString();
+  }
+
+  public String marshal () {
+    return serialize(upList);
+  }
+  
+  public String getMyLogUpList() {
+    return serialize(myLog);
   }
 
   public void print() {

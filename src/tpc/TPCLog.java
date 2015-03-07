@@ -151,8 +151,10 @@ public class TPCLog {
         pendingReq = null;
         node.state = TPCNode.SlaveState.ABORTED;
       } else if (m.isCommit()) {
-        node.execute(pendingReq);
-        node.state = TPCNode.SlaveState.COMMITTED;
+        if (pendingReq != null) {
+          node.execute(pendingReq);
+          node.state = TPCNode.SlaveState.COMMITTED;
+        }
       } else if (m.isPreCommit()) {
         assert node.state == TPCNode.SlaveState.UNCERTAIN;
         node.state = TPCNode.SlaveState.COMMITTABLE;
@@ -167,13 +169,18 @@ public class TPCLog {
       System.out.println("Current state: " + node.state.name());
     }
     System.out.println("Rebuild server finished!!");
-    lastStep();
+
+    while(!lastStep()) {
+      ;
+    }
+    recovery = false;
   }
 
-  public void lastStep() {
-    node.broadcast(new Message(Constants.STATE_QUERY));  
+  public boolean lastStep() {
+    node.broadcast(new Message(Constants.STATE_QUERY, "", "", 
+        node.upList.getMyLogUpList()));  
     try {
-      Thread.sleep(node.getSleepTime() * 2);
+      Thread.sleep(node.getSleepTime());
     } catch (InterruptedException e1) {
       e1.printStackTrace();
     }
@@ -182,14 +189,13 @@ public class TPCLog {
     case COMMITTABLE: 
       node.logToScreen("Unable to recover by itself ...");
       node.logToScreen("Let's ask for help!");
-      node.broadcast(new Message(Constants.STATE_QUERY));
+      //node.broadcast(new Message(Constants.STATE_QUERY));
       try {
         Thread.sleep(node.getSleepTime() * 2);
       } catch (InterruptedException e) {
         e.printStackTrace();
       }
-      lastStep();  // keep trying ...
-      break;
+      return totalFailureRecover();
     case ABORTED:
       // just to update current master and uplist
       node.logToScreen("I am back aborted!! LOL...");
@@ -200,7 +206,7 @@ public class TPCLog {
         pendingReq = null;
       }
       node.printPlayList();
-      break;
+      return true;
     case COMMITTED:
       // to update current master and upList
       node.logToScreen("I am back commited!! LOL...");
@@ -211,7 +217,29 @@ public class TPCLog {
         }
       }
       node.printPlayList();
+      return true;
+    default:
+      return false;
     }
-    node.broadcast(new Message(Constants.JOIN_REQ));
+    // node.broadcast(new Message(Constants.JOIN_REQ));
   }
+
+  
+  /*
+   * check if we need to run group termination or not...
+   */
+  public boolean totalFailureRecover() {
+    if (node.upList.recoverGroup.containsAll(node.upList.intersection) &&
+        node.upList.myLog.equals(node.upList.intersection)) {
+      // how to know termination group ?
+      
+      // 1. viewnum set to smallest in myLog
+      // 2. upList set to myLog
+      // 3. if i am master, run master termination 
+      //    else run slave termination waiting state request
+    }
+    
+    return true;
+  }
+
 }

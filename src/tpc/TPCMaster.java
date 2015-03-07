@@ -78,7 +78,7 @@ public class TPCMaster extends Thread implements KVStore {
           node.unicastNow(id, new Message(Constants.PRINT, "", "", 
               Constants.UPLIST));
         }
-          
+
       }
     }
   }
@@ -149,7 +149,10 @@ public class TPCMaster extends Thread implements KVStore {
 
   public void doPreCommit(TreeSet<Integer> list) {
     Message precommit = new Message(Constants.PRECOMMIT);
-    node.log(precommit);
+    if (node.state != TPCNode.SlaveState.COMMITTABLE) {
+      node.log(precommit);
+      node.state = TPCNode.SlaveState.COMMITTABLE;
+    }
     int ppc = node.config.get("partialPreCommit");
     if (ppc >= 0) {
       logToScreen("Partial preCommit to " + ppc);
@@ -303,8 +306,10 @@ public class TPCMaster extends Thread implements KVStore {
 
 
   public void collectStateReport (int time_out) {
-    broadcast(new Message(Constants.STATE_REQ, "", "", node.upList.marshal()));
-    
+    node.broadcast(
+        new Message(Constants.STATE_REQ, "", "", node.upList.marshal()), 
+        node.upList.getBroadcastList());
+
     for (int i = 0; i < time_out; i++) {
       if (stateReports.size() == node.size()) {
         return;
