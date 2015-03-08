@@ -401,6 +401,7 @@ public class TPCSlave extends Thread {
           //logToScreen("Update current master to >>> " + m.getSrc() + "<<<");
           //node.viewNum = m.getSrc();
         }
+        //node.logToScreen("HBT reset");
         hbt.reset();
       }
     }

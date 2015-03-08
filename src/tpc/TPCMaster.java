@@ -469,7 +469,9 @@ public class TPCMaster extends Thread implements KVStore {
   class HeartBeater extends Thread {
     public void run() {
       while (true) {
-        node.broadcast(new Message(Constants.HEART_BEAT));
+    	  //YW: Broadcast to everyone instead of broadcast list?
+        //node.broadcast(new Message(Constants.HEART_BEAT));
+        node.broadcastAll(new Message(Constants.HEART_BEAT));
         try {
           Thread.sleep(node.getDelayTime());
         } catch (InterruptedException e) {

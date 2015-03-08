@@ -38,5 +38,7 @@ public class Constants {
   
   //YW: add constant is_master, used in state_reply
   public static final String IS_MASTER = "is_master";
+  //YW: constant has_master
+  public static final String HAS_MASTER = "has_master";
   
 }

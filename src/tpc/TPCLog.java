@@ -18,6 +18,9 @@ public class TPCLog {
   private ArrayList<Message> entries;
   boolean recovery;
   Message pendingReq;
+  
+  boolean canNotRecover = false; //YW: Flag showing that whether node can recover by its own
+  //YW: If cannot recover by its own, wait longer/ or just don't participate master election
 
   /**
    * Constructs a TPCLog to log Messages from the TPCNode.
@@ -36,6 +39,7 @@ public class TPCLog {
       recovery = true;
       node.isRecovery = true;
       node.hasMaster = false;
+      node.systemHasMaster = false;
       rebuildServer();
     } else {
       recovery = false;
@@ -178,15 +182,29 @@ public class TPCLog {
       recovery = !lastStep();
     }
     //YW: Wait till master is set
+    //YW: check multiple times before checkHasMaster
     if(!node.hasMaster){
     	node.logToScreen("Still wait for Master");
-    	try {
-  	        Thread.sleep(node.getSleepTime() * 2);
-        } catch (InterruptedException e) {
+    	int waitingForMasterTime = 5;
+    	if(canNotRecover){
+    		waitingForMasterTime = 10;
+    	}
+    	for (int i = 0;i < waitingForMasterTime;i++){
+    		if(node.hasMaster){
+    			break;
+    		}
+    		try {
+    			Thread.sleep(node.getSleepTime());
+    		} catch (InterruptedException e) {
         	e.printStackTrace();
-        }
+    		}
+    	}// Wait 5*getSleepTime() for potential state reply 
+        //YW: EDIT: Check whether to become a new Master
+        checkHasMaster();
     }
-    
+    //YW: Broadcast joinRequest ??
+    node.broadcastAll(new Message(Constants.JOIN_REQ));
+    node.upList.print();
   }
   
   /**
@@ -200,7 +218,10 @@ public class TPCLog {
   public void checkHasMaster(){
 	  if(node.hasMaster){ //just return if has no master yet
 		  return;
-	  }else{
+	  }else if(node.systemHasMaster){//YW: Wait if no response from master but some nodes claim they have a master
+		  return;
+	  }
+	  else{
 		  switch(node.state){
 		  case ABORTED:
 			  node.logToScreen("No other Master available, I am ABORTED and select myself");
@@ -237,6 +258,7 @@ public class TPCLog {
 	  recovery = false;
 	  node.isMaster = true;
 	  node.hasMaster = true;
+	  node.systemHasMaster = true;
 	  if(node.slaveThread != null){
     	  node.slaveThread.shutdown();
     	  node.slaveThread = null;
@@ -256,6 +278,7 @@ public class TPCLog {
     case COMMITTABLE: 
       node.logToScreen("Unable to recover by itself ...");
       node.logToScreen("Let's ask for help!");
+      canNotRecover = true;
       //YW: QueryState keeps sending the query
       //node.broadcast(new Message(Constants.STATE_QUERY));
       try {
@@ -350,6 +373,7 @@ public class TPCLog {
 
       //YW: has master now and reset startingNode
       node.hasMaster = true;
+      node.systemHasMaster = true;
 	  node.upList.startingNode = node.viewNum;
 
 	  //YW: Why waiting here?
@@ -396,16 +420,25 @@ public class TPCLog {
       while (recovery || !node.hasMaster) {
     	  // YW: shall I assume that before recovery, the upList of users are REAL broadcast list to every one??
         //node.broadcast(new Message(Constants.STATE_QUERY, "", "", node.upList.getMyLogUpList()));
-    	  node.broadcastAll(new Message(Constants.STATE_QUERY, "", "", node.upList.getMyLogUpList()));
+    	  //YW: ADD IS_MASTER to state query
+    	  if(node.isMaster){
+    		  node.broadcastAll(new Message(Constants.STATE_QUERY, "", Constants.IS_MASTER, node.upList.getMyLogUpList()));
+    	  }else if(node.hasMaster){
+    		  node.broadcastAll(new Message(Constants.STATE_QUERY, "", Constants.HAS_MASTER, node.upList.getMyLogUpList()));
+    	  }
+    	  else{
+    		  node.broadcastAll(new Message(Constants.STATE_QUERY, "", "", node.upList.getMyLogUpList()));
+    	  }
         try {
           Thread.sleep(node.getSleepTime());
         } catch (InterruptedException e1) {
           e1.printStackTrace();
         }
         //YW: Check whether to become a new Master
-        if(!recovery){
+        //YW: EDIT: move this part to rebuildServer
+        /*if(!recovery){
             checkHasMaster();
-        }
+        }*/
       }
     }
   }

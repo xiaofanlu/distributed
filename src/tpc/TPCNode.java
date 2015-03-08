@@ -28,6 +28,8 @@ public class TPCNode implements KVStore {
   public boolean isMaster = false;
   public boolean hasMaster; //YW: If a node is recovered, and sees no 
   									//other master reply it, then select itself as new master
+  public boolean systemHasMaster; //YW:TRUE: if there is, or will be a master selected
+  
 
   int viewNum; // Current Master ID
   public TreeSet<Integer> broadcastList;
@@ -69,6 +71,7 @@ public class TPCNode implements KVStore {
     //YW: default hasMaster value is true. If the node is recovered, 
     // hasMaster will be set to false in TPCLog and finally set to true after recovery
     hasMaster = true;
+    systemHasMaster = true;
     log = new TPCLog("TPCLog" + getProcNum() + ".txt", this);
     start();
   }
@@ -360,6 +363,20 @@ public class TPCNode implements KVStore {
     }
 
     public void handleStateQuery(Message m) {
+    	//YW: EDIT: First, check whether the node has master
+    	if(!hasMaster){
+    		if( m.getUrl().equals(Constants.IS_MASTER)){
+    			logToScreen("Get query from Master "+m.getSrc()+", has master now");
+    			systemHasMaster = true;
+    			hasMaster = true;
+    			viewNum = m.getSrc();
+    			upList.startingNode = viewNum;
+    		}
+    		else if(m.getUrl().equals(Constants.HAS_MASTER)){
+    			systemHasMaster = true;
+    		}
+    	}
+    	
       switch (state) {
       case UNCERTAIN:
       case COMMITTABLE: 
@@ -375,8 +392,13 @@ public class TPCNode implements KVStore {
         stateReply = 
         		//YW:Changed stateReply Message, add is_master
             new Message(Constants.STATE_REPLY, upList.marshal(), Constants.IS_MASTER, state.name());
-        }else{
+        }else if(hasMaster){
         stateReply = 
+            		//YW:Changed stateReply Message, add is_master
+            new Message(Constants.STATE_REPLY, upList.marshal(), Constants.HAS_MASTER, state.name());
+        }
+        else{
+        	stateReply = 
             		//YW:Changed stateReply Message, add is_master
             new Message(Constants.STATE_REPLY, upList.marshal(), "", state.name());
         }
@@ -404,10 +426,18 @@ public class TPCNode implements KVStore {
 
     public void handleStateReply(Message m) {
     	//YW: if the reply stating it is master, then switch master to that node:
-    	if(!hasMaster && m.getUrl().equals(Constants.IS_MASTER)){
-    		hasMaster = true;
-    		viewNum = m.getSrc();
-    		upList.startingNode = viewNum;
+    	//YW: EDIT: First, check whether the node has master
+    	if(!hasMaster){
+    		if( m.getUrl().equals(Constants.IS_MASTER)){
+    			logToScreen("Get Reply from Master "+m.getSrc()+", has master now");
+    			systemHasMaster = true;
+    			hasMaster = true;
+    			viewNum = m.getSrc();
+    			upList.startingNode = viewNum;
+    		}
+    		else if(m.getUrl().equals(Constants.HAS_MASTER)){
+    			systemHasMaster = true;
+    		}
     	}
     	
       switch (state) {
