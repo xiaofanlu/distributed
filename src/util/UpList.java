@@ -19,6 +19,7 @@ public class UpList {
   public TreeSet<Integer> intersection;
   public TreeSet<Integer> myLog;  // logged uplist, not current view
   public TreeSet<Integer> recoverGroup;  // node that has statequery
+  
 
   public UpList(TPCNode node) {
     this.node = node;

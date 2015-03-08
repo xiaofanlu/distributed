@@ -24,6 +24,8 @@ public class TPCNode implements KVStore {
   TPCSlave slaveThread;
   boolean isRecovery;
   boolean hasRecovered = false;
+  boolean hasStarted = false;
+  
 
   int viewNum; // Current Master ID
   public TreeSet<Integer> broadcastList;
@@ -63,6 +65,12 @@ public class TPCNode implements KVStore {
     pl = new PlayList ();
     new Listener().start();  
     log = new TPCLog("TPCLog" + getProcNum() + ".txt", this);
+    if(isRecovery){
+    	Message msg = new Message(Constants.JOIN_REQ,state.name());
+    	//isRecovery = false; // Now in stable state
+    	broadcastAll(msg);
+    }
+    hasStarted = true;
     start();
   }
 
@@ -85,9 +93,13 @@ public class TPCNode implements KVStore {
       System.out.println(">>>> Run as Master");
       masterThread = new TPCMaster(this);
       masterThread.start();
+    } else if(isRecovery && viewNum == getProcNum()) {
+    	System.out.println(">>>> Run as Master");
+        masterThread = new TPCMaster(this,false);
+        masterThread.start();
     } else {
       System.out.println(">>>> Run as Slave");
-      slaveThread = new TPCSlave(this);
+      slaveThread = new TPCSlave(this,false,false);
       slaveThread.start();
     }
   }
@@ -276,6 +288,77 @@ public class TPCNode implements KVStore {
     slaveThread = new TPCSlave(TPCNode.this, true, false);
     slaveThread.start();
   }
+  
+  /*
+   * YW: Broadcast joinRequest if the node is recovered
+   *
+   */
+  public void broadcastAll(Message m){	  
+	  TreeSet<Integer> broadcastListAll = new TreeSet<Integer>();
+	    for (int i = 0; i < config.numProcesses; i++) {
+	      if (i != config.procNum) {
+	        broadcastListAll.add(i);
+	      }
+	    }
+	    broadcast(m,broadcastListAll);
+  }
+  /*
+   * YW: handle Join Request
+   *
+   */
+  public void handleJoinReq(Message m){	  
+	  logToScreen("Node " + m.getSrc() + " is back! Welcome!");
+      upList.add(m.getSrc()); 
+      upList.print();
+      upList.upList.add(m.getSrc());
+      boolean stateChanged = false;
+      if(!hasStarted && isRecovery){
+    	  state = SlaveState.valueOf(m.getMessage());
+    	  if(state == SlaveState.COMMITTED){
+    		  Message commit = new Message(Constants.COMMIT);
+    		  log(commit);
+    	  }else if(state == SlaveState.ABORTED){
+    		  rollback();
+    		  Message abort = new Message(Constants.ABORT);
+    		  log(abort);
+    	  }
+    	  stateChanged = true;
+      }
+      upList.add(m.getSrc());
+      if(hasStarted){
+    	  if(m.getSrc()<viewNum){ // new node should be new master
+	      		viewNum = m.getSrc();
+		      	if(viewNum == getProcNum()){
+		      		masterThread.finished = true;
+		      		if(masterThread.sc!=null){
+		      			//masterThread.sc.close();
+		      		}
+		      		logToScreen("===== new Master Rejoined  =====");
+		      		masterThread = null;
+		  	        System.out.println(">>>> Run as Slave");
+			      	slaveThread = new TPCSlave(this,false,false);
+			        slaveThread.start();
+		      	}
+		      	else{
+		      		slaveThread.shutdown();
+			      	slaveThread = new TPCSlave(this,false,false);
+			        slaveThread.start();
+		      	}
+    	  }else{ // No new master is elected, thus only need to restart if the state changes
+    		  if(stateChanged){
+    			  if(viewNum == getProcNum()){
+    				  masterThread.finished = true;
+    				  logToScreen("===== New Round Starts Master Rejoined  =====");
+  		      		  masterThread = null;
+  		      		  masterThread = new TPCMaster(this,false);
+  		      		  System.out.println(">>>> Run as Master");
+    			  }
+    		  }
+    	  }
+      }
+  }
+  
+  
 
   // inner Listener class
   class Listener extends Thread {
@@ -303,9 +386,7 @@ public class TPCNode implements KVStore {
       } else if (m.isStateReply()) {
         handleStateReply(m);
       } else if (m.isJoinReq()) {
-        logToScreen("Node " + m.getSrc() + " is back! Welcome!");
-        upList.add(m.getSrc()); 
-        upList.print();
+    	  handleJoinReq(m);
       } else if (m.isPrintReq()) {
         if (m.getMessage().equals(Constants.PLAYLIST)) {
           printPlayList();
@@ -344,9 +425,12 @@ public class TPCNode implements KVStore {
       switch (state) {
       case UNCERTAIN:
       case COMMITTABLE: 
-        //logToScreen(": Still conducting tranction, 
+        //logToScreen(": Still conducting transaction, 
         // unable to reply state query ...");
-        break;
+        
+    	  break;
+        
+        
       case ABORTED:
       case COMMITTED:
         logToScreen("Reply to state query from " + 
@@ -359,7 +443,7 @@ public class TPCNode implements KVStore {
         }
         unicast(m.getSrc(), stateReply);
       }
-      if (isRecovery) {
+      if (!hasStarted) {
         if (!upList.uLog.containsKey(m.getSrc())) {
           logToScreen("Get StateReq from node " + m.getSrc());
           TreeSet<Integer> otherLog = upList.parseString(m.getMessage());

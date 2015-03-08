@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import util.Constants;
 import util.Message;
 
+
 public class TPCLog {
 
   private String logPath;
@@ -18,7 +19,8 @@ public class TPCLog {
   private ArrayList<Message> entries;
   boolean recovery;
   Message pendingReq;
-
+  
+  
   /**
    * Constructs a TPCLog to log Messages from the TPCNode.
    *
