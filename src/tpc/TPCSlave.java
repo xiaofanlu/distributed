@@ -12,7 +12,7 @@ import util.Message;
 
 public class TPCSlave extends Thread {
   private TPCNode node;
-  private final int TIME_OUT = 6;  // 10 secs timeout
+  private final int TIME_OUT = 8;  // 10 secs timeout
   private Queue<Message> tpcReq = new ConcurrentLinkedQueue<Message> ();
   volatile boolean finished = false;
   boolean stateReq = false;
@@ -26,9 +26,11 @@ public class TPCSlave extends Thread {
 
   public TPCSlave(TPCNode node) {
     this.node = node;
-    node.state = TPCNode.SlaveState.ABORTED;
-    // just to create an empty log
-    node.log(new Message(Constants.ABORT));
+    if (!node.isRecovery) {
+      node.state = TPCNode.SlaveState.ABORTED;
+      // just to create an empty log
+      node.log(new Message(Constants.ABORT));
+    }
   }
 
   public TPCSlave(TPCNode node, boolean t, boolean s) {

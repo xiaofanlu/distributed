@@ -320,10 +320,10 @@ public class TPCNode implements KVStore {
       }
       else {
         messageQueue.offer(m);
-        messageCount.put(m.getSrc(), 
-            messageCount.containsKey(m.getSrc()) ?
-                messageCount.get(m.getSrc()) + 1 : 1);
         if (!m.isHeartBeat()) {
+          messageCount.put(m.getSrc(), 
+              messageCount.containsKey(m.getSrc()) ?
+                  messageCount.get(m.getSrc()) + 1 : 1);
           if (config.get("deathAfterProcess") == m.getSrc()) {
             if (config.get("deathAfterCount") <=
                 messageCount.get(m.getSrc())) {
