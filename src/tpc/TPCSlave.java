@@ -516,7 +516,7 @@ public class TPCSlave extends Thread {
      */
     @Override
     public void run(){
-      logToScreen(" >>> time out!!! Coordinator must be down...");
+      //logToScreen(" >>> time out!!! Coordinator must be down...");
       //exitAndRunElection();
     }
   }
