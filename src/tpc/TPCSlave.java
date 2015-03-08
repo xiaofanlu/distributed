@@ -291,6 +291,11 @@ public class TPCSlave extends Thread {
         return;
       }
     }
+    //YW: If not waiting for stateReq, need to set stateReq to true : Check 
+    else{
+    	stateReq = true;
+    }
+    
     //reportState(node.getMaster());
     //YW: shutting down still not quite clean
     if (finished) {
@@ -433,11 +438,6 @@ public class TPCSlave extends Thread {
         stateReq = true;
         expectStateReq = false;
       } else {
-    	  //YW:if received new state req, still set stateReq to true
-    	  if(node.upList.isValidNewMaster(m.getSrc())){
-    		  stateReq = true;
-    		  expectStateReq = false;
-    	  }
         updateInfo(m);
         switch(node.state) {
         case COMMITTABLE:
