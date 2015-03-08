@@ -36,4 +36,7 @@ public class Constants {
   
   public static final String KILL = "kill";
   
+  //YW: add constant is_master, used in state_reply
+  public static final String IS_MASTER = "is_master";
+  
 }

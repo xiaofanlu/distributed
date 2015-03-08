@@ -20,6 +20,9 @@ public class UpList {
   public TreeSet<Integer> myLog;  // logged uplist, not current view
   public TreeSet<Integer> recoverGroup;  // node that has statequery
   
+  //YW: pM
+  public Integer startingNode = 0;
+  
 
   public UpList(TPCNode node) {
     this.node = node;
@@ -102,18 +105,54 @@ public class UpList {
   public int size() {
     return upList.size() - 1;
   }
-
+  
+  /**
+   * YW: set new Master, update UPList
+   * @param id
+   */
   public void setMaster (int id) {
     TreeSet<Integer> list = new TreeSet<Integer> ();
-    for (int i : upList) {
-      if (i >= id) {
-        list.add(i);
-      }
+    if(id>=startingNode){
+    	for(int i:upList){
+    		if(i<startingNode || i>=id){
+    			list.add(i);
+    		}
+    	}
+    }else{
+    	for(int i : upList){
+    		if(i>=id && i<= startingNode){
+    			list.add(i);
+    		}
+    	}    	
     }
     upList = list;
     logToFile();
   }
-
+  
+  /**
+   * YW: Check whether a process is a valid new master OR a node not knowing it's dead
+   * @return process id is valid new master
+   */
+  public boolean isValidNewMaster(int id){
+	  if(id<0){
+		  System.out.println("Invalid ID <0");
+	  }
+	  if(startingNode <= node.getMaster()){
+		  if(id >= node.getMaster() || id <startingNode){  // -- id -- Starting * * * * Master -- id --  
+			  return true;
+		  }else{
+			  return false;
+		  }
+	  }else{
+		  if(id >= node.getMaster() && id < startingNode){ // ** Master -- id --- Starting * * * * 
+			  return true;
+		  }
+		  else{
+			  return false;
+		  }
+	  }
+  }
+  
   public TreeSet<Integer> getBroadcastList() {
     TreeSet<Integer> rst = new TreeSet<Integer> (upList);
     rst.remove(node.getProcNum());
@@ -121,10 +160,22 @@ public class UpList {
   }
 
 
+  /**
+   * YW: getMaster return the minmum node>startingNode, or the minimum <startingNode
+   * @return
+   */
+  
   public int getMaster () {
     int master = Integer.MAX_VALUE;
     for (int i : upList) {
-      master = Math.min(master, i);
+    	if(i>= startingNode){
+	      master = Math.min(master, i);
+    	}
+    }
+    if(master == Integer.MAX_VALUE){
+    	for (int i : upList) {
+	      master = Math.min(master, i);
+        }
     }
     return master;
   }

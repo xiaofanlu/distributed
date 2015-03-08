@@ -11,7 +11,6 @@ import java.util.ArrayList;
 import util.Constants;
 import util.Message;
 
-
 public class TPCLog {
 
   private String logPath;
@@ -19,8 +18,7 @@ public class TPCLog {
   private ArrayList<Message> entries;
   boolean recovery;
   Message pendingReq;
-  
-  
+
   /**
    * Constructs a TPCLog to log Messages from the TPCNode.
    *
@@ -37,6 +35,7 @@ public class TPCLog {
     if(logFile.exists() && !logFile.isDirectory()) {
       recovery = true;
       node.isRecovery = true;
+      node.hasMaster = false;
       rebuildServer();
     } else {
       recovery = false;
@@ -174,10 +173,81 @@ public class TPCLog {
     }
     System.out.println("Rebuild server finished!!");
 
-    new QueryState().start();
+    new QueryState().start();//Keeps sending query until finished last step
     while(recovery) {
       recovery = !lastStep();
     }
+    //YW: Wait till master is set
+    if(!node.hasMaster){
+    	node.logToScreen("Still wait for Master");
+    	try {
+  	        Thread.sleep(node.getSleepTime() * 2);
+        } catch (InterruptedException e) {
+        	e.printStackTrace();
+        }
+    }
+    
+  }
+  
+  /**
+   * YW: this function is used to check whether there is already Master node already in
+   * the system:
+   * If there is one (hasMaster): do nothing
+   * else: if this node is in steady state, select itself as new master, and broadcast state_reply to 
+   * EVERY node, whether they're alive or not.
+   * @return
+   */
+  public void checkHasMaster(){
+	  if(node.hasMaster){ //just return if has no master yet
+		  return;
+	  }else{
+		  switch(node.state){
+		  case ABORTED:
+			  node.logToScreen("No other Master available, I am ABORTED and select myself");
+		      if (pendingReq != null) {
+		        if (!getLastEntry().isAbort()) {
+		          appendAndFlush(new Message(Constants.ABORT));
+		        }
+		        pendingReq = null;
+		      }
+		      startAsMaster();
+		      node.printPlayList();
+		  case COMMITTED:
+			  node.logToScreen("No other Master available, I am COMMITTED and select myself");
+		      if (pendingReq != null) {
+		        if (!getLastEntry().isCommit()) {
+		          appendAndFlush(new Message(Constants.COMMIT));
+		        }
+		        pendingReq = null;
+		      }
+		      startAsMaster();
+		      node.printPlayList();
+		  default:
+			  return;
+		  }
+	  }
+  }
+  /**
+   * YW: Start as master, called in checkHasMaster.
+   */
+  public void startAsMaster(){
+	  node.viewNum = node.getProcNum();
+	  node.upList.startingNode = node.getProcNum();
+	  node.hasRecovered = true;
+	  recovery = false;
+	  node.isMaster = true;
+	  node.hasMaster = true;
+	  if(node.slaveThread != null){
+    	  node.slaveThread.shutdown();
+    	  node.slaveThread = null;
+      }	  
+	  node.masterThread = new TPCMaster(node, false);
+      node.masterThread.start();
+      
+      //Broadcast state reply to every node
+      node.upList.upList = node.upList.recoverGroup;
+      Message msg = new Message(Constants.STATE_REPLY, node.upList.marshal(), Constants.IS_MASTER, node.state.name());
+      node.broadcastAll(msg);
   }
 
   public boolean lastStep() {
@@ -186,13 +256,25 @@ public class TPCLog {
     case COMMITTABLE: 
       node.logToScreen("Unable to recover by itself ...");
       node.logToScreen("Let's ask for help!");
+      //YW: QueryState keeps sending the query
       //node.broadcast(new Message(Constants.STATE_QUERY));
       try {
         Thread.sleep(node.getSleepTime() * 5);
       } catch (InterruptedException e) {
         e.printStackTrace();
       }
-      return totalFailureRecover();
+      
+      //YW: should check its state AGAIN before going to totalFailureRecover
+      	switch(node.state){
+      	case UNCERTAIN:
+      	case COMMITTABLE:
+      		return totalFailureRecover();
+  		default:
+  			return false;
+      	}
+      	
+      //return totalFailureRecover();      
+      
     case ABORTED:
       // just to update current master and uplist
       node.logToScreen("I am back aborted!! LOL...");
@@ -213,7 +295,7 @@ public class TPCLog {
           appendAndFlush(new Message(Constants.COMMIT));
         }
       }
-      node.printPlayList();
+      node.printPlayList(); 
       return true;
     default:
       return false;
@@ -245,8 +327,12 @@ public class TPCLog {
     if (node.upList.recoverGroup.containsAll(node.upList.intersection) &&
         node.upList.myLog.equals(node.upList.intersection)) {
       // how to know termination group ?
-      // 1. viewnum set to smallest in myLog
+      // 1. viewNum set to smallest in myLog
       node.viewNum = node.upList.myLog.first();
+      
+      //YW: Update startingNode since viewNum is the master of the voting group and will not change
+      node.upList.startingNode = node.viewNum;
+      
       // 2. upList set to myLog
       node.upList.upList = node.upList.myLog;
       // 3. if i am master, run master termination
@@ -260,13 +346,22 @@ public class TPCLog {
       if (pendingReq != null) {
         node.execute(pendingReq);
       }
+      
 
+      //YW: has master now and reset startingNode
+      node.hasMaster = true;
+	  node.upList.startingNode = node.viewNum;
+
+	  //YW: Why waiting here?
       try {
         Thread.sleep(node.getSleepTime() * 3);
       } catch (InterruptedException e) {
         e.printStackTrace();
       }
+	  
       if (node.getProcNum() == node.getMaster()) {
+    	  //YW: is selected as master
+    	  node.isMaster = true;
         node.masterThread = new TPCMaster(node, true);
         node.masterThread.start();
       } else {
@@ -296,13 +391,20 @@ public class TPCLog {
        * add my self to recoverGroup
        */
       node.upList.recoverGroup.add(node.getProcNum());
-      while (recovery) {
-        node.broadcast(new Message(Constants.STATE_QUERY, "", "", 
-            node.upList.getMyLogUpList()));  
+      
+      //YW: will not recover until finding a master
+      while (recovery || !node.hasMaster) {
+    	  // YW: shall I assume that before recovery, the upList of users are REAL broadcast list to every one??
+        //node.broadcast(new Message(Constants.STATE_QUERY, "", "", node.upList.getMyLogUpList()));
+    	  node.broadcastAll(new Message(Constants.STATE_QUERY, "", "", node.upList.getMyLogUpList()));
         try {
           Thread.sleep(node.getSleepTime());
         } catch (InterruptedException e1) {
           e1.printStackTrace();
+        }
+        //YW: Check whether to become a new Master
+        if(!recovery){
+            checkHasMaster();
         }
       }
     }

@@ -17,8 +17,6 @@ public class TPCMaster extends Thread implements KVStore {
   public ArrayList<Message> stateReports = null;
   public TreeSet<Integer> uncertainList = null;
   private boolean recovery = false;
-  public boolean finished = false;
-  public Scanner sc;
 
   private final int TIME_OUT = 4;  // 10 secs timeout
 
@@ -35,22 +33,22 @@ public class TPCMaster extends Thread implements KVStore {
   }
 
   public void run() {
+	  //YW: Set isMaster to true
+	  node.isMaster = true;
     new Listener().start();
     new HeartBeater().start();
 
     if (recovery) {
       runTermination();
     }
-    sc = new Scanner(System.in);
-    while (!finished) {
+    Scanner sc = new Scanner(System.in);
+    while (true) {
       getCommandFromUser(sc);
     }
   }
 
   public void getCommandFromUser(Scanner sc) {
-	  if(finished){
-		  return;
-	  }
+
     int command = getIntInput(sc, "Enter num for command (" + 
         "1: add, 2: del, 3: edit, 4: playList, 5: log, 6: upList) : ");
     if (command <= 0 || command > 6) {
@@ -103,14 +101,8 @@ public class TPCMaster extends Thread implements KVStore {
 
 
   public int getIntInput(Scanner sc, String prop) {
-	  if(finished){
-		  return -1;
-	  }
     System.out.print(prop);
     while (!sc.hasNextInt()) {
-    	if(finished){
-    		return -1;
-    	}
         sc.nextLine();
       System.out.print(prop);  
     }
@@ -215,15 +207,9 @@ public class TPCMaster extends Thread implements KVStore {
   }
 
   public boolean twoPC(Message m) {
-	if(finished){
-  		return false;
-  	}
     startTPC(m);
     boolean rst = false;
     if (collectReply(TIME_OUT)) {  // no timeout
-    	if(finished){
-    		return false;
-    	}
       if (noList.size() == 0 && node.execute(m)) {
         doCommit();
         rst = true;
@@ -241,9 +227,6 @@ public class TPCMaster extends Thread implements KVStore {
 
 
   public void startTPC (Message m) {
-	  if(finished){
-  		return;
-  	}
     yesList = new TreeSet<Integer> ();
     noList  = new TreeSet<Integer> ();
     ackList = new TreeSet<Integer> ();
@@ -254,9 +237,6 @@ public class TPCMaster extends Thread implements KVStore {
   }
 
   public void finishTPC() {
-	  if(finished){
-	  		return;
-	  	}
     yesList = null;
     noList = null;
     ackList = null;
@@ -271,9 +251,6 @@ public class TPCMaster extends Thread implements KVStore {
    */
   public boolean collectReply(int time_out) {
     for (int i = 0; i < time_out; i++) {
-    	if(finished){
-    		return false;
-    	}
       if (yesList.size() + noList.size() == node.size()) {
         logToScreen("All votes collected. Yes: " + yesList.size() + " No: " + noList.size());
         return true;  // no tme_out
@@ -296,9 +273,6 @@ public class TPCMaster extends Thread implements KVStore {
    */
   public boolean collectAck(int time_out, int size) {
     for (int i = 0; i < time_out; i++) {
-    	if(finished){
-      		return true;
-      	}
       if (ackList.size() == size) {
         logToScreen("All acks collected.");
         return true;  // no tme_out
@@ -324,19 +298,10 @@ public class TPCMaster extends Thread implements KVStore {
    */
   public boolean threePC(Message m) {
     startTPC(m);
-    if(finished){
-  		return false;
-  	}
     boolean rst = false;
     if (!collectReply(TIME_OUT)) {    //no timeout
-        if(finished){
-      		return false;
-      	}
-    	doAbort(yesList);
+      doAbort(yesList);
     } else {
-        if(finished){
-      		return false;
-      	}
       // if all message were YES and coordinator voted Yes
       if (noList.size() == 0 && node.execute(m)) {  
         // send pre-commit to all participants
@@ -358,17 +323,11 @@ public class TPCMaster extends Thread implements KVStore {
 
 
   public void collectStateReport (int time_out) {
-	  if(finished){
-    		return;
-    	}
     node.broadcast(
         new Message(Constants.STATE_REQ, "", "", node.upList.marshal()), 
         node.upList.getBroadcastList());
 
     for (int i = 0; i < time_out; i++) {
-    	if(finished){
-    		return;
-    	}
       if (stateReports.size() == node.size()) {
         return;
       } else {
@@ -387,9 +346,6 @@ public class TPCMaster extends Thread implements KVStore {
   }
 
   public TPCNode.SlaveState countStateReport() {
-	  if(finished){
-    		return node.state;
-    	}
     logToScreen("Counting state reports, I have " + stateReports.size());
     int committableCount = 0;
     Message masterState = new Message(Constants.STATE_REP, "", "", node.state.name());
@@ -423,9 +379,6 @@ public class TPCMaster extends Thread implements KVStore {
   }
 
   public void startTermination() {
-	  if(finished){
-    		return;
-    	}
     logToScreen("Start Master's termination protocol");
     stateReports = new ArrayList<Message> ();
     uncertainList = new TreeSet<Integer>();
@@ -439,9 +392,6 @@ public class TPCMaster extends Thread implements KVStore {
   }
 
   public void finishTermination() {
-	  if(finished){
-    		return;
-    	}
     logToScreen("Finish Master's termination protocol");
     stateReports = null;
     uncertainList = null;
@@ -457,9 +407,6 @@ public class TPCMaster extends Thread implements KVStore {
    * 
    */
   public void runTermination() {
-	  if(finished){
-    		return;
-    	}
     startTermination();
     //   broadcast(new Message(Constants.STATE_REQ));
     collectStateReport(TIME_OUT);
@@ -487,7 +434,7 @@ public class TPCMaster extends Thread implements KVStore {
   // inner Listener class
   class Listener extends Thread {
     public void run() {
-      while (!finished) {
+      while (true) {
         if (!node.messageQueue.isEmpty()) {
           processMessage(node.messageQueue.poll());
         } else {
@@ -501,9 +448,6 @@ public class TPCMaster extends Thread implements KVStore {
     }
 
     public void processMessage(Message m) {
-    	if(finished){
-      		return;
-      	}
       if (m == null) {
         return;
       }
@@ -524,7 +468,7 @@ public class TPCMaster extends Thread implements KVStore {
   // inner Listener class
   class HeartBeater extends Thread {
     public void run() {
-      while (!finished) {
+      while (true) {
         node.broadcast(new Message(Constants.HEART_BEAT));
         try {
           Thread.sleep(node.getDelayTime());

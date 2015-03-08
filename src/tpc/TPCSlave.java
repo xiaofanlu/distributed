@@ -56,6 +56,7 @@ public class TPCSlave extends Thread {
         }
       } else {
         Message m = tpcReq.poll();
+        
         runTPC(m);
       }
     }
@@ -96,6 +97,8 @@ public class TPCSlave extends Thread {
    * 
    */
   public void runTPC(Message m) {
+	  //YW: not sure this is correct:
+	  //node state is ABORTED everytime a new request come?
     node.state = TPCNode.SlaveState.ABORTED;
     if (executeRequest(m)) {
       getFeedback(TIME_OUT);
@@ -224,6 +227,11 @@ public class TPCSlave extends Thread {
       if (terminationResp) {
         return;
       }
+      //YW: Clean Shutdown!
+      if(finished){
+    	  return;
+      }
+      
       try {
         logToScreen("Waiting for termination response " + i);
         hbt.setTimeout((time_out + 1) *  node.getSleepTime());
@@ -242,6 +250,7 @@ public class TPCSlave extends Thread {
     if (m.getSrc() != node.getMaster()) {
       logToScreen("Update master to node :" + m.getSrc());
       node.viewNum = m.getSrc();
+      node.upList.startingNode = node.viewNum;
     }
     boolean success = false;
     node.log(m);  // log the vote_req 
@@ -283,6 +292,10 @@ public class TPCSlave extends Thread {
       }
     }
     //reportState(node.getMaster());
+    //YW: shutting down still not quite clean
+    if (finished) {
+        return;
+      }
     TPCNode.SlaveState pState = node.state;
     if (node.state == TPCNode.SlaveState.UNCERTAIN) {
       getResponse(TIME_OUT);
@@ -410,13 +423,21 @@ public class TPCSlave extends Thread {
 
     public void handleStateReq(Message m) {
       //logToScreen("Got State Request");
-      if (node.getMaster() <= m.getSrc()) {
+      //YW: check whether m.getSrc is valid new Master
+    	//YW: report state when: 1) a new valid master asks 2) Expected Master sends request
+    	//if (node.getMaster() <= m.getSrc()) {
+      if(node.upList.isValidNewMaster(m.getSrc())){
         reportState(m.getSrc());
       }
       if (expectStateReq) {
         stateReq = true;
         expectStateReq = false;
       } else {
+    	  //YW:if received new state req, still set stateReq to true
+    	  if(node.upList.isValidNewMaster(m.getSrc())){
+    		  stateReq = true;
+    		  expectStateReq = false;
+    	  }
         updateInfo(m);
         switch(node.state) {
         case COMMITTABLE:
@@ -431,7 +452,9 @@ public class TPCSlave extends Thread {
     }
 
     public void updateInfo(Message m) {
-      if (node.getMaster() < m.getSrc()) {
+    	//YW: Change condition
+      //if (node.getMaster() < m.getSrc()) {
+      if(node.upList.isValidNewMaster(m.getSrc()) && node.getMaster() != m.getSrc()){//YW
         logToScreen("StateReq not from current view num...");          
         logToScreen("Update current master to >>> " + m.getSrc() + "<<<");
         node.viewNum = m.getSrc();
