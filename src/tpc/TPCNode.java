@@ -377,17 +377,32 @@ public class TPCNode implements KVStore {
     		}
     	}
     	
+
+        Message stateReply;
+        
       switch (state) {
       case UNCERTAIN:
       case COMMITTABLE: 
         //logToScreen(": Still conducting tranction, 
         // unable to reply state query ...");
+    	  //YW: EDIT: send state reply if process has master
+    	  if(isMaster){
+    		  stateReply = 
+    	            new Message(Constants.STATE_REPLY, upList.marshal(), Constants.IS_MASTER, state.name());
+    		  unicast(m.getSrc(), stateReply);
+    	  }else if(hasMaster){
+    		  stateReply = 
+				  new Message(Constants.STATE_REPLY,upList.marshal(), Constants.HAS_MASTER, state.name());
+    		  unicast(m.getSrc(), stateReply);
+    	  }else{
+    		  //Do nothing if not recovered
+    	  }
+          
         break;
       case ABORTED:
       case COMMITTED:
         logToScreen("Reply to state query from " + 
             m.getSrc() + ": " + state.name());
-        Message stateReply;
         if(isMaster){
         stateReply = 
         		//YW:Changed stateReply Message, add is_master
@@ -439,19 +454,27 @@ public class TPCNode implements KVStore {
     			systemHasMaster = true;
     		}
     	}
+    	//YW: Add node to Uplist if it has master (in progress)
+    	if(m.getUrl().equals(Constants.IS_MASTER) || m.getUrl().equals(Constants.IS_MASTER)){
+    		upList.add(m.getSrc());
+    	}
     	
       switch (state) {
       case UNCERTAIN:
       case COMMITTABLE: 
-        logToScreen("Thanks for your state reply! New state: " 
-            + m.getMessage());
+        logToScreen("Thanks for state reply! Your state: " 
+            + m.getMessage()+" My: "+state.name());
       case ABORTED:
       case COMMITTED:
         //viewNum = m.getSrc();
         state = SlaveState.valueOf(m.getMessage());
         // update upList from others
         if (m.getSong().length() > 0) {
-          upList.updateFromString(m.getSong());
+          //YW: just add process to upList !
+        	if(m.getUrl().equals(Constants.IS_MASTER) || m.getUrl().equals(Constants.HAS_MASTER)){
+        		upList.add(m.getSrc());
+        	}
+        	// upList.updateFromString(m.getSong());
         }
         upList.add(getProcNum());
         //upList.print();      

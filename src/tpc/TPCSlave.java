@@ -250,8 +250,8 @@ public class TPCSlave extends Thread {
     if (m.getSrc() != node.getMaster()) {
       logToScreen("Update master to node :" + m.getSrc());
       node.viewNum = m.getSrc();
-      node.upList.startingNode = node.viewNum;
     }
+    node.upList.startingNode = node.viewNum;
     boolean success = false;
     node.log(m);  // log the vote_req 
     if (m.getMessage().equals(Constants.ADD)) {
